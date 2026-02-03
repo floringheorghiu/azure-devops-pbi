@@ -10,3 +10,4 @@ security_audit_*.md
 azure-devops-worker/
 private-backend-source.zip
 .npm_cache
+bundle_v2.js
