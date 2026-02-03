@@ -1,0 +1,26 @@
+{
+  "name": "Azure DevOps PBI Integration",
+  "id": "1597630559550478534",
+  "api": "1.0.0",
+  "widgetApi": "1.0.0",
+  "containsWidget": true,
+  "main": "bundle_v2.js",
+  "ui": "ui.html",
+  "permissions": [],
+  "capabilities": [],
+  "enableProposedApi": false,
+  "documentAccess": "dynamic-page",
+  "editorType": [
+    "figma",
+    "figjam"
+  ],
+  "networkAccess": {
+    "allowedDomains": [
+      "https://dev.azure.com",
+      "https://*.visualstudio.com",
+      "https://*.microsoft.com",
+      "https://api.vssps.visualstudio.com",
+      "https://azure-devops-proxy.adosync.workers.dev"
+    ]
+  }
+}

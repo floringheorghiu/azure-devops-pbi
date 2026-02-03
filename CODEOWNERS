@@ -1,0 +1,7 @@
+# Default owner for everything in the repo
+* @floringheorghiu
+
+# Security-critical files require extra review
+.github/workflows/* @floringheorghiu
+src/utils/encryption.* @floringheorghiu
+manifest.json @floringheorghiu

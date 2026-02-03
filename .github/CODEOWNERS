@@ -1,0 +1,6 @@
+# Code owners for repository - update as needed
+# Use GitHub usernames or teams (e.g., @org/team). Currently assigns ownership to repo owner.
+/docs/ @floringheorghiu
+/src/ @floringheorghiu
+/package.json @floringheorghiu
+/.github/ @floringheorghiu

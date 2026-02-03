@@ -1,0 +1,553 @@
+import './src/utils/polyfill'; // Must be first to mock environment for node-forge
+import { WidgetState, PBIData, APIError, PluginMessage } from './src/types';
+import { ConfigStorageService } from './src/services/configStorage';
+import { PBIValidationService } from './src/services/pbiValidation';
+import { AzureDevOpsURLParser } from './src/utils/urlParser';
+
+declare const figma: any;
+declare const __html__: string;
+
+const { widget } = figma;
+const { useSyncedState, usePropertyMenu, AutoLayout, Text, Rectangle, h, Fragment, useEffect, waitForTask } = (widget || {}) as any;
+
+// Shared state for routing UI messages to the correct widget instance
+let activeInstanceUpdateHandler: ((url: string) => Promise<void>) | null = null;
+
+const WIDGET_VERSION = '3.1.0'; // UI Fix + Versioning
+
+const PENDING_PBI_KEY = 'pending_pbi_data';
+
+// --- Utility Functions ---
+
+function getStateColor(state: string): { bg: string; text: string } {
+  const stateColors = {
+    'New': { bg: '#EBF4FF', text: '#005A9E' },
+    'Active': { bg: '#DFF6DD', text: '#107C10' },
+    'Resolved': { bg: '#F3F2F1', text: '#1F1F1F' },
+    'Closed': { bg: '#F3F2F1', text: '#666' },
+    'Done': { bg: '#DFF6DD', text: '#107C10' },
+    'To Do': { bg: '#EBF4FF', text: '#005A9E' },
+    'In Progress': { bg: '#FFF4CE', text: '#795500' },
+    'default': { bg: '#F3F2F1', text: '#1F1F1F' }
+  };
+  return (stateColors as any)[state] || stateColors.default;
+}
+
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '…';
+}
+
+function formatRelativeTime(dateInput: any): string {
+  try {
+    if (!dateInput) return '';
+    // Force conversion to Date object in case it's a plain serialized object
+    const date = new Date(dateInput);
+    if (isNaN(date.getTime())) return '';
+
+    const diff = new Date().getTime() - date.getTime();
+    const diffMins = Math.floor(diff / 60000);
+    if (diffMins < 1) return 'just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) return `${diffHours}h ago`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d ago`;
+  } catch (e) {
+    return '';
+  }
+}
+
+const handleStoreConfig = async (payload: any) => {
+  await ConfigStorageService.storeConfig(payload);
+  if (figma.ui) {
+    figma.ui.postMessage({ type: 'config-stored', payload: { success: true } });
+  }
+};
+
+const handleClearConfig = async () => {
+  await ConfigStorageService.clearConfig();
+};
+
+function PBIWidget() {
+  const [widgetState, setWidgetState] = useSyncedState('widgetState', {
+    pbiInfo: { organization: '', project: '', workItemId: 0, url: '' },
+    currentData: null,
+    lastRefresh: null,
+    isLoading: false,
+    error: null,
+    displayMode: 'expanded',
+    acPattern: '',
+    customWidth: 340, // Default width
+    visibleFields: undefined
+  } as WidgetState);
+
+  const [expandedAcIndex, setExpandedAcIndex] = useSyncedState('expandedAcIndex', -1);
+  const [isDescriptionExpanded, setIsDescriptionExpanded] = useSyncedState('isDescriptionExpanded', false);
+
+  // Safely check for pending data in a lifecycle hook
+  useEffect(() => {
+    // Register this instance as the active listener for UI updates
+    activeInstanceUpdateHandler = async (url: string) => {
+      await handleUpdatePBI(url);
+    };
+
+    // Cleanup
+    return () => {
+      activeInstanceUpdateHandler = null;
+    };
+  });
+
+  useEffect(() => {
+    if (!widgetState.currentData && !widgetState.isLoading) {
+      waitForTask(handleCheckPending());
+    }
+  }, []); // Run once on mount
+
+  async function handleCheckPending() {
+    try {
+      const pendingUrl = await figma.clientStorage.getAsync(PENDING_PBI_KEY);
+      if (pendingUrl) {
+        console.log('Found pending URL:', pendingUrl);
+        // Clear it immediately to prevent loops, then try to use it
+        await figma.clientStorage.deleteAsync(PENDING_PBI_KEY);
+        try {
+          await handleUpdatePBI(pendingUrl);
+        } catch (innerErr) {
+          console.warn('Pending URL was invalid, ignoring:', innerErr);
+          // Silent fail: do not set widget state to error
+        }
+        return;
+      }
+    } catch (e) {
+      console.warn('Check pending failed:', e);
+    }
+  }
+
+  // Removed usePropertyMenu to move controls to canvas for better UX
+
+  const handleOpenUI = async () => {
+    // Note: In Widget context, we still support opening the UI for configuration
+    figma.showUI(__html__, { width: 400, height: 600 });
+    const config = await ConfigStorageService.getConfigInfo();
+    if (config && figma.ui) {
+      figma.ui.postMessage({ type: 'init', payload: { config, isInstance: true, version: WIDGET_VERSION } });
+    }
+    // Keep internal promise pending to prevent immediate closure if needed,
+    // though awaiting the config is usually enough to signal intent.
+    return new Promise(() => { }); // Intentionally hang to keep widget process alive while UI is open
+  };
+
+  const handleUpdatePBI = async (url: string) => {
+    const parseResult = AzureDevOpsURLParser.parseURL(url);
+    if (!parseResult.isValid || !parseResult.data) {
+      throw new Error(parseResult.error || 'Invalid URL');
+    }
+
+    const config = await ConfigStorageService.retrieveConfig();
+    if (!config) throw new Error('Setup required');
+
+    setWidgetState({ ...widgetState, isLoading: true });
+
+    const validation = await PBIValidationService.validatePBI(parseResult.data, config.pat);
+    if (!validation.isValid || !validation.data) {
+      throw new Error(validation.error?.userMessage || 'Validation failed');
+    }
+
+    setWidgetState({
+      ...widgetState,
+      pbiInfo: parseResult.data,
+      currentData: validation.data,
+      lastRefresh: new Date(),
+      isLoading: false,
+      error: null,
+      acPattern: config.acPattern || '',
+      visibleFields: config.visibleFields
+    });
+  };
+
+
+
+  const handleRefresh = async () => {
+    if (widgetState.isLoading) return;
+
+    setWidgetState({ ...widgetState, isLoading: true, error: null });
+
+    try {
+      const config = await ConfigStorageService.retrieveConfig();
+      if (!config || !config.pat) {
+        throw new Error('PAT not found. Please configure the plugin.');
+      }
+
+      const validation = await PBIValidationService.validatePBI(widgetState.pbiInfo, config.pat);
+      if (!validation.isValid || !validation.data) {
+        throw new Error(validation.error?.userMessage || 'Failed to refresh work item.');
+      }
+
+      setWidgetState({
+        ...widgetState,
+        currentData: validation.data,
+        lastRefresh: new Date(),
+        isLoading: false,
+        visibleFields: config.visibleFields // Refresh config too
+      });
+    } catch (err) {
+      setWidgetState({
+        ...widgetState,
+        isLoading: false,
+        error: {
+          code: 'REFRESH_ERROR',
+          message: (err as any).message,
+          userMessage: (err as any).message,
+          retryable: true,
+        },
+      });
+    }
+  };
+
+  const handleResize = (delta: number) => {
+    const current = widgetState.customWidth || 340;
+    const newWidth = Math.max(280, Math.min(800, current + delta)); // Clamp between 280 and 800
+    setWidgetState({ ...widgetState, customWidth: newWidth });
+  };
+
+  const handleOpenLink = () => {
+    if (widgetState.pbiInfo && widgetState.pbiInfo.url) {
+      // In widget environment, we can use figma.openExternal ??
+      // Actually figma.openExternal exists. If pbiInfo.url is constructed or stored.
+      // AzureDevOpsURLParser creates parsed data, but might not store full original URL?
+      // We can reconstruct it or store/pass it.
+      // parseUrl returns { data: { ... url: string } }
+
+      // Let's assume widgetState.pbiInfo.url is valid.
+      // If empty, reconstruct:
+      const { organization, project, workItemId } = widgetState.pbiInfo;
+      // Standard URL construction fallback
+      const targetUrl = widgetState.pbiInfo.url || `https://dev.azure.com/${organization}/${project}/_workitems/edit/${workItemId}`;
+      console.log('Opening:', targetUrl);
+      // Widget API openExternal? 
+      // waitForTask(() => figma.openExternal(targetUrl));
+      // Actually widget actions should be async promises usually or Effect side effects.
+      // But onClick can trigger a promise.
+      // Figma Widgets: onClick supports openUrl directly?
+    }
+  };
+
+
+  const parseAcceptanceCriteria = (data: PBIData): string[] => {
+    const acString = data.acceptanceCriteria.join('\n');
+    const pattern = widgetState.acPattern || '';
+    if (!pattern) {
+      return acString.split('\n').filter(ac => ac.trim() !== '');
+    }
+    try {
+      const regex = new RegExp(pattern, 'g');
+      return acString.split(regex).filter(ac => ac.trim() !== '');
+    } catch (e) {
+      console.error('Invalid AC Regex:', e);
+      return [acString];
+    }
+  };
+
+  // Helper to safely strip HTML for Figma Text
+  const stripHtml = (html: string) => {
+    if (!html) return '';
+    // Basic regex strip. 
+    // For improved cleanliness, replace <br> with \n first, <p> with \n\n.
+    let text = html
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/p>/gi, '\n\n')
+      .replace(/<\/div>/gi, '\n')
+      .replace(/<[^>]+>/g, '');
+    return text.trim();
+  };
+
+  if (widgetState.isLoading) return <LoadingState />;
+  if (widgetState.error) return <ErrorState error={widgetState.error as any} onRetry={handleRefresh} onConfigure={handleOpenUI} />;
+
+  // Smart Widget Empty State: Directs user to configure via UI on click
+  if (!widgetState.currentData) {
+    return (
+      <AutoLayout
+        direction="vertical"
+        padding={24}
+        fill="#FFFFFF"
+        cornerRadius={12}
+        stroke="#E6E6E6"
+        spacing={12}
+        width={320}
+        horizontalAlignItems="center"
+        effect={{
+          type: 'drop-shadow',
+          color: { r: 0, g: 0, b: 0, a: 0.1 },
+          offset: { x: 0, y: 4 },
+          blur: 12,
+        }}
+        onClick={() => new Promise(resolve => resolve(null))} // Prevent selection pass-through
+      >
+        <Text fontSize={16} fontWeight="bold" fill="#333333">Azure DevOps PBI</Text>
+        <Text fontSize={12} fill="#666666" width="fill-parent" horizontalAlignText="center">
+          Click 'Connect' to load a PBI from URL.
+        </Text>
+
+        <AutoLayout
+          padding={{ top: 8, bottom: 8, left: 16, right: 16 }}
+          fill="#0078D4"
+          cornerRadius={6}
+          onClick={handleOpenUI}
+        >
+          <Text fill="#FFFFFF" fontSize={12} fontWeight="bold">Connect PBI</Text>
+        </AutoLayout>
+      </AutoLayout>
+    );
+  }
+
+  const parsedACs = parseAcceptanceCriteria(widgetState.currentData);
+  const width = widgetState.customWidth || 340;
+
+  // Destructure visibility preferences with defaults (true if undefined for backward compat, or check logic)
+  const show = widgetState.visibleFields || {
+    showType: true, showState: true, showDesc: true, showTags: true,
+    showArea: true, showIteration: true, showAssigned: true, showChanged: true, showDone: false
+  };
+
+  return (
+    <AutoLayout direction="vertical" width={width} cornerRadius={8} fill="#FFF" stroke="#E5E5E5" padding={16} spacing={12}>
+      {/* Header: ID and Title */}
+      < AutoLayout verticalAlignItems="center" width="fill-parent" spacing={8}>
+        < Text fontSize={14} fontWeight={600} width="fill-parent">#{widgetState.currentData.id}: {widgetState.currentData.title}</Text >
+      </AutoLayout >
+
+      {/* Meta Row: Type, State, Board Column, Tags */}
+      <AutoLayout spacing={8} wrap={true} width="fill-parent">
+        {show.showType && <Text fontSize={11} fill="#666" fontWeight={500}>{widgetState.currentData.workItemType}</Text>}
+
+        {show.showState && <StatePill state={widgetState.currentData.state} />}
+
+        {/* Show Board Column as a pill if it exists and check logic? Reuse StatePill logic for visual? */}
+        {widgetState.currentData.boardColumn && <StatePill state={widgetState.currentData.boardColumn} isColumn={true} />}
+
+        {show.showDone && widgetState.currentData.boardColumnDone && (
+          <AutoLayout padding={{ horizontal: 6, vertical: 2 }} cornerRadius={10} fill="#DFF6DD">
+            <Text fontSize={10} fill="#107C10">Done</Text>
+          </AutoLayout>
+        )}
+
+        {show.showTags && widgetState.currentData.tags && widgetState.currentData.tags.map((tag: string, i: number) => (
+          <AutoLayout key={i} padding={{ horizontal: 6, vertical: 2 }} cornerRadius={10} fill="#F3F2F1">
+            <Text fontSize={10} fill="#666">{tag}</Text>
+          </AutoLayout>
+        ))}
+      </AutoLayout >
+
+      {/* Context Row: Area & Iteration */}
+      {(show.showArea || show.showIteration) && (
+        <AutoLayout direction="vertical" width="fill-parent" spacing={4}>
+          {show.showArea && <Text fontSize={10} fill="#888">📂 {widgetState.currentData.areaPath}</Text>}
+          {show.showIteration && <Text fontSize={10} fill="#888">📅 {widgetState.currentData.iterationPath}</Text>}
+        </AutoLayout>
+      )}
+
+      {/* Description */}
+      {show.showDesc && widgetState.currentData.description && (
+        <AutoLayout
+          direction="vertical"
+          width="fill-parent"
+          spacing={4}
+          padding={{ top: 4, bottom: 4 }}
+          onClick={() => setIsDescriptionExpanded(!isDescriptionExpanded)}
+          cursor="pointer"
+          hoverStyle={{ bg: '#FAFAFA' }}
+        >
+          <Text fontSize={12} fill="#333" width="fill-parent" lineHeight={16}>
+            {isDescriptionExpanded
+              ? stripHtml(widgetState.currentData.description)
+              : truncateText(stripHtml(widgetState.currentData.description), 150)}
+          </Text>
+        </AutoLayout>
+      )}
+
+      {/* Acceptance Criteria */}
+      <AutoLayout direction="vertical" width="fill-parent" spacing={4}>
+        < Text fontSize={12} fontWeight={600} > Acceptance Criteria</Text >
+        {
+          parsedACs.map((ac, index) => (
+            <AccordionItem
+              key={index}
+              content={ac}
+              isExpanded={index === expandedAcIndex}
+              onClick={() => setExpandedAcIndex(index === expandedAcIndex ? -1 : index)}
+            />
+          ))
+        }
+      </AutoLayout >
+
+      {/* Footer Info: Assigned, Updated, Changed */}
+      <AutoLayout width="fill-parent" verticalAlignItems="center" spacing={8} wrap={true}>
+        {show.showAssigned && < Text fontSize={10} fill="#999">Assigned: {widgetState.currentData.assignedTo || 'Unassigned'}</Text>}
+        {show.showChanged && < Text fontSize={10} fill="#999"> | Mod: {widgetState.currentData.changedBy}</Text>}
+        < Text fontSize={10} fill="#999">
+          {widgetState.lastRefresh ? ` | ${formatRelativeTime(widgetState.lastRefresh)}` : ''}
+        </Text >
+      </AutoLayout >
+
+      {/* Footer Controls */}
+      <AutoLayout
+        width="fill-parent"
+        verticalAlignItems="center"
+        horizontalAlignItems="center"
+        padding={{ top: 8 }}
+      >
+        <AutoLayout spacing={8} verticalAlignItems="center">
+          <ActionButton label="-" onClick={() => handleResize(-40)} />
+          <Text fontSize={10} fill="#999">Width</Text>
+          <ActionButton label="+" onClick={() => handleResize(40)} />
+        </AutoLayout>
+
+        <Rectangle width="fill-parent" height={1} fill={{ type: 'solid', color: '#000000', opacity: 0 }} />
+
+        <AutoLayout spacing={8}>
+          <ActionButton label="Open" onClick={() => {
+            const url = widgetState.pbiInfo?.url || `https://dev.azure.com/${widgetState.pbiInfo.organization}/${widgetState.pbiInfo.project}/_workitems/edit/${widgetState.pbiInfo.workItemId}`;
+            return new Promise(() => figma.openExternal(url));
+          }} />
+          <ActionButton label="Refresh" onClick={handleRefresh} />
+          <ActionButton label="Settings" onClick={handleOpenUI} />
+        </AutoLayout>
+      </AutoLayout>
+    </AutoLayout >
+  );
+}
+
+// --- Sub-components (unchanged but defined for scope) ---
+const LoadingState = () => <BaseState><Text>Loading PBI...</Text></BaseState>;
+const EmptyState = ({ onConfigure }: { onConfigure: () => void }) => (
+  <BaseState>
+    <AutoLayout direction="vertical" horizontalAlignItems="center" spacing={8}>
+      <Text fontWeight={600}>No PBI Loaded</Text>
+      <Text fontSize={11} fill="#666" horizontalAlignText="center">Open the 'Azure DevOps' plugin to select a PBI</Text>
+      <ActionButton label="Configure" onClick={onConfigure} />
+    </AutoLayout >
+  </BaseState >
+);
+const ErrorState = ({ error, onRetry, onConfigure }: { error: any, onRetry: () => void, onConfigure: () => void }) => (
+  <BaseState>
+    <AutoLayout direction="vertical" horizontalAlignItems="center" spacing={8} padding={16}>
+      <Text fill="#D92C2C" horizontalAlignText="center">{(error as any).userMessage || 'An error occurred'}</Text>
+      <AutoLayout spacing={12}>
+        <Text onClick={onRetry} hoverStyle={{ textDecoration: 'underline' }} cursor="pointer">Retry</Text>
+        <Text onClick={onConfigure} hoverStyle={{ textDecoration: 'underline' }} cursor="pointer">Configure</Text>
+      </AutoLayout >
+    </AutoLayout >
+  </BaseState >
+);
+const BaseState: any = ({ children }: { children: any }) => (
+  <AutoLayout width={340} height={200} verticalAlignItems="center" horizontalAlignItems="center" fill="#F7F7F7" cornerRadius={8}>
+    {children}
+  </AutoLayout >
+);
+const AccordionItem = ({ content, isExpanded, onClick }: { content: string, isExpanded: boolean, onClick: () => void, key?: any }) => (
+  <AutoLayout direction="vertical" width="fill-parent" stroke="#EEE" cornerRadius={4} onClick={onClick} hoverStyle={{ bg: '#F7F7F7' }} cursor="pointer">
+    < AutoLayout width="fill-parent" padding={8} verticalAlignItems="center" spacing={4} direction={isExpanded ? "vertical" : "horizontal"}>
+      {/* If expanded, we show full text vertical. If collapsed, truncated horizontal. */}
+      {/* Wait, the existing component had a single Text. We can adjust or keep simple. */}
+      {/* The previous code was: <Text ...>{isExpanded ? content : truncateText...}</Text> */}
+      {/* Let's keep it simple for now, but handle multiline better if expanded. */}
+      < Text fontSize={11} width="fill-parent" paragraphIndent={isExpanded ? 0 : 0} lineHeight={16}>
+        {isExpanded ? content : truncateText(stripHTMLSimple(content), 50)}
+      </Text>
+    </AutoLayout >
+  </AutoLayout >
+);
+
+// Helper for Accordion (duplicated strip because scope) or move stripHtml up?
+// Move stripHtml logic into utility if possible, or duplicate for safety in this restricted block.
+function stripHTMLSimple(html: string) {
+  return html.replace(/<[^>]+>/g, '').trim();
+}
+
+const StatePill = ({ state, isColumn }: { state: string, isColumn?: boolean }) => (
+  <AutoLayout padding={{ horizontal: 6, vertical: 2 }} cornerRadius={10} fill={isColumn ? '#EEE' : getStateColor(state).bg}>
+    <Text fontSize={10} fill={isColumn ? '#444' : getStateColor(state).text}>{state}</Text>
+  </AutoLayout>
+);
+const ActionButton = ({ label, onClick }: { label: string, onClick?: () => void }) => (
+  <AutoLayout padding={{ horizontal: 8, vertical: 4 }} cornerRadius={4} stroke="#DDD" hoverStyle={{ bg: '#F7F7F7' }} cursor="pointer" onClick={onClick}>
+    < Text fontSize={11} > {label}</Text >
+  </AutoLayout >
+);
+
+// --- Entry Point Logic ---
+
+/**
+ * Smart Widget Strategy:
+ * - 'containsWidget: true' acts as an implicit widget insertion command.
+ * - We remove the global 'run' handler to prevent UI flashing on launch.
+ * - The Widget component handles the "Setup" state and opens the UI on demand.
+ */
+
+// 1. Setup global message handling (for when the user opens UI from the widget)
+figma.ui.onmessage = async (msg: PluginMessage) => {
+  try {
+    switch (msg.type) {
+      case 'store-config':
+        await handleStoreConfig(msg.payload);
+        // If we have an active instance update handler, use it
+        if (activeInstanceUpdateHandler) {
+          // await activeInstanceUpdateHandler(msg.payload.url); // Does this payload have URL? No, store-config payload is config.
+          // Oops, store-config payload does NOT have URL.
+          // User flow: Store Config -> then what?
+          // If stored, we might want to refresh the active widget if it exists?
+          // But refresh needs a URL? 
+          // The previous code: await activeInstanceUpdateHandler(msg.payload.url);
+          // Check ui.html: sendMessage('store-config', { organization, pat, acPattern, visibleFields }); -> NO URL.
+          // So this line `msg.payload.url` will be undefined.
+          // We should just refresh the current widget if possible, or do nothing.
+          // If we have access to current widget state? We don't from `figma.ui.onmessage` easily unless we stored it.
+          // But `activeInstanceUpdateHandler` expects a URL.
+          // We can change activeInstanceUpdateHandler to take optional URL?
+          // Or just notify 'Config Saved'.
+
+          figma.notify("Configuration saved. Please refresh the widget.");
+        } else {
+          // Fallback for disconnected UI
+          // await figma.clientStorage.setAsync(PENDING_PBI_KEY, ...); // No URL to set
+          figma.notify("Config saved.");
+        }
+        break;
+      case 'create-widget':
+        // Payload has URL
+        if (msg.payload.url) {
+          // Fire and forget storage of the base URL
+          ConfigStorageService.storeLastBaseUrl(msg.payload.url).catch(console.error);
+        }
+
+        if (activeInstanceUpdateHandler) {
+          await activeInstanceUpdateHandler(msg.payload.url);
+          figma.notify('Widget updated!');
+        } else {
+          await figma.clientStorage.setAsync(PENDING_PBI_KEY, msg.payload.url);
+          figma.notify("PBI Saved! Drag a new widget to see it.");
+        }
+        break;
+      // ...
+      // ... (rest of switch)
+
+      case 'clear-config':
+        await handleClearConfig();
+        break;
+    }
+  } catch (e: any) {
+    figma.notify('Error: ' + e.message);
+  }
+};
+
+// 2. Widget Context (Always register)
+try {
+  if (typeof widget !== 'undefined' && widget.register) {
+    widget.register(PBIWidget);
+    console.log('Azure DevOps Widget Loaded - Version Fix 2.0 - Timestamp: ' + new Date().toISOString());
+  }
+} catch (e) {
+  console.log('Widget registration failed or not supported.');
+}

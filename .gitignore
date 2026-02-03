@@ -1,0 +1,12 @@
+bundle.js
+code.js
+widget.js
+node_modules/
+backend/node_modules/
+.env
+backend/
+misc/
+security_audit_*.md
+azure-devops-worker/
+private-backend-source.zip
+.npm_cache
