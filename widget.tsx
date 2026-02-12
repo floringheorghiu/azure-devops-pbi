@@ -8,7 +8,7 @@ declare const figma: any;
 declare const __html__: string;
 
 const { widget } = figma;
-const { useSyncedState, usePropertyMenu, AutoLayout, Text, Rectangle, h, Fragment, useEffect, waitForTask } = (widget || {}) as any;
+const { useSyncedState, usePropertyMenu, AutoLayout, Text, Rectangle, SVG, h, Fragment, useEffect, waitForTask } = (widget || {}) as any;
 
 // Shared state for routing UI messages to the correct widget instance
 let activeInstanceUpdateHandler: ((url: string) => Promise<void>) | null = null;
@@ -69,6 +69,8 @@ const handleClearConfig = async () => {
   await ConfigStorageService.clearConfig();
 };
 
+// ... (previous code)
+
 function PBIWidget() {
   const [widgetState, setWidgetState] = useSyncedState('widgetState', {
     pbiInfo: { organization: '', project: '', workItemId: 0, url: '' },
@@ -79,7 +81,8 @@ function PBIWidget() {
     displayMode: 'expanded',
     acPattern: '',
     customWidth: 340, // Default width
-    visibleFields: undefined
+    visibleFields: undefined,
+    completedAcIndices: []
   } as WidgetState);
 
   const [expandedAcIndex, setExpandedAcIndex] = useSyncedState('expandedAcIndex', -1);
@@ -124,8 +127,6 @@ function PBIWidget() {
     }
   }
 
-  // Removed usePropertyMenu to move controls to canvas for better UX
-
   const handleOpenUI = async () => {
     // Note: In Widget context, we still support opening the UI for configuration
     figma.showUI(__html__, { width: 400, height: 600 });
@@ -133,9 +134,8 @@ function PBIWidget() {
     if (config && figma.ui) {
       figma.ui.postMessage({ type: 'init', payload: { config, isInstance: true, version: WIDGET_VERSION } });
     }
-    // Keep internal promise pending to prevent immediate closure if needed,
-    // though awaiting the config is usually enough to signal intent.
-    return new Promise(() => { }); // Intentionally hang to keep widget process alive while UI is open
+    // Keep internal promise pending to prevent immediate closure if needed
+    return new Promise(() => { });
   };
 
   const handleUpdatePBI = async (url: string) => {
@@ -165,8 +165,6 @@ function PBIWidget() {
       visibleFields: config.visibleFields
     });
   };
-
-
 
   const handleRefresh = async () => {
     if (widgetState.isLoading) return;
@@ -211,28 +209,16 @@ function PBIWidget() {
     setWidgetState({ ...widgetState, customWidth: newWidth });
   };
 
-  const handleOpenLink = () => {
-    if (widgetState.pbiInfo && widgetState.pbiInfo.url) {
-      // In widget environment, we can use figma.openExternal ??
-      // Actually figma.openExternal exists. If pbiInfo.url is constructed or stored.
-      // AzureDevOpsURLParser creates parsed data, but might not store full original URL?
-      // We can reconstruct it or store/pass it.
-      // parseUrl returns { data: { ... url: string } }
-
-      // Let's assume widgetState.pbiInfo.url is valid.
-      // If empty, reconstruct:
-      const { organization, project, workItemId } = widgetState.pbiInfo;
-      // Standard URL construction fallback
-      const targetUrl = widgetState.pbiInfo.url || `https://dev.azure.com/${organization}/${project}/_workitems/edit/${workItemId}`;
-      console.log('Opening:', targetUrl);
-      // Widget API openExternal? 
-      // waitForTask(() => figma.openExternal(targetUrl));
-      // Actually widget actions should be async promises usually or Effect side effects.
-      // But onClick can trigger a promise.
-      // Figma Widgets: onClick supports openUrl directly?
+  const toggleAcStatus = (index: number) => {
+    const currentIndices = widgetState.completedAcIndices || [];
+    let newIndices;
+    if (currentIndices.includes(index)) {
+      newIndices = currentIndices.filter(i => i !== index);
+    } else {
+      newIndices = [...currentIndices, index];
     }
+    setWidgetState({ ...widgetState, completedAcIndices: newIndices });
   };
-
 
   const parseAcceptanceCriteria = (data: PBIData): string[] => {
     const acString = data.acceptanceCriteria.join('\n');
@@ -252,8 +238,6 @@ function PBIWidget() {
   // Helper to safely strip HTML for Figma Text
   const stripHtml = (html: string) => {
     if (!html) return '';
-    // Basic regex strip. 
-    // For improved cleanliness, replace <br> with \n first, <p> with \n\n.
     let text = html
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/p>/gi, '\n\n')
@@ -265,7 +249,7 @@ function PBIWidget() {
   if (widgetState.isLoading) return <LoadingState />;
   if (widgetState.error) return <ErrorState error={widgetState.error as any} onRetry={handleRefresh} onConfigure={handleOpenUI} />;
 
-  // Smart Widget Empty State: Directs user to configure via UI on click
+  // Smart Widget Empty State
   if (!widgetState.currentData) {
     return (
       <AutoLayout
@@ -304,8 +288,6 @@ function PBIWidget() {
 
   const parsedACs = parseAcceptanceCriteria(widgetState.currentData);
   const width = widgetState.customWidth || 340;
-
-  // Destructure visibility preferences with defaults (true if undefined for backward compat, or check logic)
   const show = widgetState.visibleFields || {
     showType: true, showState: true, showDesc: true, showTags: true,
     showArea: true, showIteration: true, showAssigned: true, showChanged: true, showDone: false
@@ -318,21 +300,16 @@ function PBIWidget() {
         < Text fontSize={14} fontWeight={600} width="fill-parent">#{widgetState.currentData.id}: {widgetState.currentData.title}</Text >
       </AutoLayout >
 
-      {/* Meta Row: Type, State, Board Column, Tags */}
+      {/* Meta Row */}
       <AutoLayout spacing={8} wrap={true} width="fill-parent">
         {show.showType && <Text fontSize={11} fill="#666" fontWeight={500}>{widgetState.currentData.workItemType}</Text>}
-
         {show.showState && <StatePill state={widgetState.currentData.state} />}
-
-        {/* Show Board Column as a pill if it exists and check logic? Reuse StatePill logic for visual? */}
         {widgetState.currentData.boardColumn && <StatePill state={widgetState.currentData.boardColumn} isColumn={true} />}
-
         {show.showDone && widgetState.currentData.boardColumnDone && (
           <AutoLayout padding={{ horizontal: 6, vertical: 2 }} cornerRadius={10} fill="#DFF6DD">
             <Text fontSize={10} fill="#107C10">Done</Text>
           </AutoLayout>
         )}
-
         {show.showTags && widgetState.currentData.tags && widgetState.currentData.tags.map((tag: string, i: number) => (
           <AutoLayout key={i} padding={{ horizontal: 6, vertical: 2 }} cornerRadius={10} fill="#F3F2F1">
             <Text fontSize={10} fill="#666">{tag}</Text>
@@ -340,7 +317,7 @@ function PBIWidget() {
         ))}
       </AutoLayout >
 
-      {/* Context Row: Area & Iteration */}
+      {/* Context Row */}
       {(show.showArea || show.showIteration) && (
         <AutoLayout direction="vertical" width="fill-parent" spacing={4}>
           {show.showArea && <Text fontSize={10} fill="#888">📂 {widgetState.currentData.areaPath}</Text>}
@@ -376,13 +353,15 @@ function PBIWidget() {
               key={index}
               content={ac}
               isExpanded={index === expandedAcIndex}
+              isDone={(widgetState.completedAcIndices || []).includes(index)}
               onClick={() => setExpandedAcIndex(index === expandedAcIndex ? -1 : index)}
+              onToggle={() => toggleAcStatus(index)}
             />
           ))
         }
       </AutoLayout >
 
-      {/* Footer Info: Assigned, Updated, Changed */}
+      {/* Footer Info */}
       <AutoLayout width="fill-parent" verticalAlignItems="center" spacing={8} wrap={true}>
         {show.showAssigned && < Text fontSize={10} fill="#999">Assigned: {widgetState.currentData.assignedTo || 'Unassigned'}</Text>}
         {show.showChanged && < Text fontSize={10} fill="#999"> | Mod: {widgetState.currentData.changedBy}</Text>}
@@ -419,7 +398,56 @@ function PBIWidget() {
   );
 }
 
-// --- Sub-components (unchanged but defined for scope) ---
+// --- Sub-components ---
+
+const ToggleCheck = ({ isDone, onToggle }: { isDone: boolean, onToggle: () => void }) => (
+  <AutoLayout
+    width={20}
+    height={20}
+    cornerRadius={10}
+    stroke={isDone ? "#107C10" : "#999999"}
+    fill={isDone ? "#107C10" : "#FFFFFF"}
+    horizontalAlignItems="center"
+    verticalAlignItems="center"
+    onClick={(e: any) => {
+      // In Figma Widgets, returning a Promise that resolves prevents interactions from bubbling?
+      // Actually, standard behavior is touch/click on child handles it.
+      return new Promise((resolve) => {
+        onToggle();
+        resolve(null);
+      });
+    }}
+  >
+    {isDone && (
+      <SVG
+        src={`<svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M10 3L4.5 8.5L2 6" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`}
+      />
+    )}
+  </AutoLayout>
+);
+
+const AccordionItem = ({ content, isExpanded, isDone, onClick, onToggle, key }: { content: string, isExpanded: boolean, isDone: boolean, onClick: () => void, onToggle: () => void, key?: any }) => (
+  <AutoLayout direction="vertical" width="fill-parent" stroke="#EEE" cornerRadius={4} hoverStyle={{ bg: '#F7F7F7' }} cursor="pointer">
+    {/* Header Section: Text + Toggle */}
+    < AutoLayout
+      width="fill-parent"
+      padding={8}
+      verticalAlignItems="start" // Start alignment for multiline text
+      spacing={8}
+      direction="horizontal"
+      onClick={onClick}
+    >
+      < Text fontSize={11} width="fill-parent" paragraphIndent={0} lineHeight={16}>
+        {isExpanded ? content : truncateText(stripHTMLSimple(content), 50)}
+      </Text>
+
+      {/* Toggle Button - Separate interaction */}
+      <ToggleCheck isDone={isDone} onToggle={onToggle} />
+
+    </AutoLayout >
+  </AutoLayout >
+);
+
 const LoadingState = () => <BaseState><Text>Loading PBI...</Text></BaseState>;
 const EmptyState = ({ onConfigure }: { onConfigure: () => void }) => (
   <BaseState>
@@ -446,19 +474,7 @@ const BaseState: any = ({ children }: { children: any }) => (
     {children}
   </AutoLayout >
 );
-const AccordionItem = ({ content, isExpanded, onClick }: { content: string, isExpanded: boolean, onClick: () => void, key?: any }) => (
-  <AutoLayout direction="vertical" width="fill-parent" stroke="#EEE" cornerRadius={4} onClick={onClick} hoverStyle={{ bg: '#F7F7F7' }} cursor="pointer">
-    < AutoLayout width="fill-parent" padding={8} verticalAlignItems="center" spacing={4} direction={isExpanded ? "vertical" : "horizontal"}>
-      {/* If expanded, we show full text vertical. If collapsed, truncated horizontal. */}
-      {/* Wait, the existing component had a single Text. We can adjust or keep simple. */}
-      {/* The previous code was: <Text ...>{isExpanded ? content : truncateText...}</Text> */}
-      {/* Let's keep it simple for now, but handle multiline better if expanded. */}
-      < Text fontSize={11} width="fill-parent" paragraphIndent={isExpanded ? 0 : 0} lineHeight={16}>
-        {isExpanded ? content : truncateText(stripHTMLSimple(content), 50)}
-      </Text>
-    </AutoLayout >
-  </AutoLayout >
-);
+
 
 // Helper for Accordion (duplicated strip because scope) or move stripHtml up?
 // Move stripHtml logic into utility if possible, or duplicate for safety in this restricted block.

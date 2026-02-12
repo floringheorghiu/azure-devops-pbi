@@ -54,6 +54,7 @@ export interface WidgetState {
   acPattern?: string;
   visibleFields?: Record<string, boolean>;
   customWidth?: number;
+  completedAcIndices?: number[];
 }
 
 export interface BackendResponse {
