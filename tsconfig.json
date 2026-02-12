@@ -28,7 +28,6 @@
   },
   "include": [
     "src/**/*",
-    "code.ts",
     "widget.tsx",
     "__tests__/**/*"
   ],
