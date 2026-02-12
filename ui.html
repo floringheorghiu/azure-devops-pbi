@@ -400,6 +400,26 @@
       sendMessage('create-widget', { url });
     }
 
+    baseUrlInput.addEventListener('input', () => {
+      const val = baseUrlInput.value;
+      // Regex to capture base URL and the trailing ID number
+      // Refined to require a slash before the number to avoid stripping digits from project names (e.g. "project1")
+      const match = val.match(/^(.*\/)(\d+)\/?$/);
+
+      if (match) {
+        // match[1] is the base (including the slash), match[2] is the ID
+        const base = match[1];
+        const id = match[2];
+
+        // Only update if we found both parts
+        if (base && id) {
+          baseUrlInput.value = base;
+          pbiIdInput.value = id;
+          showStatus('success', 'ID extracted!');
+        }
+      }
+    });
+
 
 
     function updatePatStatus(hasPat) {
