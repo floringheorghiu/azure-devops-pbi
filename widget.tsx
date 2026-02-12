@@ -213,7 +213,7 @@ function PBIWidget() {
     const currentIndices = widgetState.completedAcIndices || [];
     let newIndices;
     if (currentIndices.includes(index)) {
-      newIndices = currentIndices.filter(i => i !== index);
+      newIndices = currentIndices.filter((i: number) => i !== index);
     } else {
       newIndices = [...currentIndices, index];
     }
