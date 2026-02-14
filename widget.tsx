@@ -8,7 +8,7 @@ declare const figma: any;
 declare const __html__: string;
 
 const { widget } = figma;
-const { useSyncedState, usePropertyMenu, AutoLayout, Text, Rectangle, SVG, h, Fragment, useEffect, waitForTask } = (widget || {}) as any;
+const { useSyncedState, usePropertyMenu, useWidgetId, AutoLayout, Text, Rectangle, SVG, h, Fragment, useEffect, waitForTask } = (widget || {}) as any;
 
 // Shared state for routing UI messages to the correct widget instance
 let activeInstanceUpdateHandler: ((url: string) => Promise<void>) | null = null;
@@ -72,6 +72,7 @@ const handleClearConfig = async () => {
 // ... (previous code)
 
 function PBIWidget() {
+  const widgetId = useWidgetId();
   const [widgetState, setWidgetState] = useSyncedState('widgetState', {
     pbiInfo: { organization: '', project: '', workItemId: 0, url: '' },
     currentData: null,
@@ -200,6 +201,152 @@ function PBIWidget() {
           retryable: true,
         },
       });
+    }
+  };
+
+
+  const handleLog = async () => {
+    try {
+      const currentPageName = figma.currentPage.name;
+      await figma.loadAllPagesAsync();
+
+      // 1. Find or create "Change Log" page
+      let logPage = figma.root.children.find((p: any) => p.name === "Change Log");
+      if (!logPage) {
+        logPage = figma.createPage();
+        logPage.name = "Change Log";
+      }
+
+      // 2. Find or create the main container frame
+      let containerFrame = logPage.children.find((n: any) => n.name === "Change Log Container" && n.type === "FRAME");
+      if (!containerFrame) {
+        containerFrame = figma.createFrame();
+        containerFrame.name = "Change Log Container";
+        containerFrame.layoutMode = "VERTICAL";
+        containerFrame.counterAxisSizingMode = "AUTO"; // Width adapts (hug)
+        containerFrame.primaryAxisSizingMode = "AUTO"; // Height adapts (hug)
+        containerFrame.itemSpacing = 24;
+        containerFrame.paddingLeft = 40;
+        containerFrame.paddingRight = 40;
+        containerFrame.paddingTop = 40;
+        containerFrame.paddingBottom = 40;
+        containerFrame.fills = [{ type: 'SOLID', color: { r: 15 / 255, g: 23 / 255, b: 42 / 255 } }]; // Dark Blue #0F172A
+        containerFrame.strokes = [];
+        containerFrame.cornerRadius = 0;
+        containerFrame.resize(800, 100); // Initial width
+
+        // Add Main Header "Change log"
+        await figma.loadFontAsync({ family: "Inter", style: "Bold" });
+        const mainHeader = figma.createText();
+        mainHeader.fontName = { family: "Inter", style: "Bold" };
+        mainHeader.characters = "Change log";
+        mainHeader.fontSize = 32;
+        mainHeader.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+        mainHeader.layoutAlign = "CENTER";
+        containerFrame.appendChild(mainHeader);
+
+        // Add separator line
+        const separator = figma.createLine();
+        separator.strokeWeight = 1;
+        separator.strokes = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+        separator.layoutAlign = "STRETCH";
+        containerFrame.appendChild(separator);
+
+        logPage.appendChild(containerFrame);
+      }
+
+      // 3. Find or create group for the source page
+      // We look for a Text node with the page name to identify the section
+      // OR we can structure it as sub-frames. Let's try to append to a sub-frame or just find the header.
+      // Simpler approach: Look for the last "Page Header" in the container.
+      // If it doesn't match current page, append new header.
+      // If it matches, append entry below it.
+      // Actually, user wants grouping. So let's look for a frame named `Page: ${currentPageName}`?
+      // Screenshot looks like a flat list with Headers.
+
+      let targetInsertIndex = containerFrame.children.length;
+      let foundPageSection = false;
+
+      // Iterate children to find if we already have a section for this page
+      // This is tricky in a flat list. Let's create a FRAME for each Page Section to make it easier.
+
+      let pageSectionFrame = containerFrame.children.find((n: any) => n.name === `Section: ${currentPageName}` && n.type === "FRAME");
+
+      if (!pageSectionFrame) {
+        pageSectionFrame = figma.createFrame();
+        pageSectionFrame.name = `Section: ${currentPageName}`;
+        pageSectionFrame.layoutMode = "VERTICAL";
+        pageSectionFrame.counterAxisSizingMode = "AUTO";
+        pageSectionFrame.primaryAxisSizingMode = "AUTO";
+        pageSectionFrame.layoutAlign = "STRETCH";
+        pageSectionFrame.itemSpacing = 16;
+        pageSectionFrame.fills = []; // Transparent
+        pageSectionFrame.strokes = [];
+
+        // Page Header
+        await figma.loadFontAsync({ family: "Inter", style: "Bold" });
+        const pageHeader = figma.createText();
+        pageHeader.fontName = { family: "Inter", style: "Bold" };
+        pageHeader.characters = currentPageName;
+        pageHeader.fontSize = 24;
+        pageHeader.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+        pageSectionFrame.appendChild(pageHeader);
+
+        containerFrame.appendChild(pageSectionFrame);
+      }
+
+      // 4. Append log entry to the Page Section Frame
+      await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+      await figma.loadFontAsync({ family: "Inter", style: "Bold" }); // For Bold parts if needed
+
+      // Format: November 17, 2025; designer: Florin G.; #2180858: (GM) PAS Details Screen...
+      const now = new Date();
+      const options: any = { year: 'numeric', month: 'long', day: 'numeric' };
+      const dateStr = now.toLocaleDateString('en-US', options);
+
+      const userName = figma.currentUser ? figma.currentUser.name : "Unknown User";
+      const pbiId = widgetState.currentData?.id || "?";
+      const pbiTitle = widgetState.currentData?.title || "No Title";
+
+      const entryText = figma.createText();
+      entryText.fontName = { family: "Inter", style: "Regular" };
+      entryText.fontSize = 14;
+      entryText.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+      entryText.layoutAlign = "STRETCH";
+
+      // Construct text content
+      const contentString = `${dateStr}; designer: ${userName}; #${pbiId}: ${pbiTitle}`;
+      entryText.characters = contentString;
+
+      // Style specifics: Title underlined?
+      // Implementation: We find the index of the title and apply text decoration.
+      const titleIndex = contentString.indexOf(pbiTitle);
+      if (titleIndex !== -1) {
+        entryText.setRangeTextDecoration(titleIndex, titleIndex + pbiTitle.length, "UNDERLINE");
+        if (widgetId) {
+          // @ts-ignore
+          entryText.setRangeHyperlink(titleIndex, titleIndex + pbiTitle.length, { type: 'NODE', value: widgetId });
+        }
+        // Make ID bold? Screenshot shows ID bold-ish or just distinct? Screenshot: "#2180858: ..." looks bold.
+        const idString = `#${pbiId}`;
+        const idIndex = contentString.indexOf(idString);
+        if (idIndex !== -1) {
+          entryText.setRangeFontName(idIndex, idIndex + idString.length, { family: "Inter", style: "Bold" });
+        }
+        entryText.setRangeFontName(titleIndex, titleIndex + pbiTitle.length, { family: "Inter", style: "Bold" });
+      } else {
+        // Fallback if split fails logic
+        entryText.fontName = { family: "Inter", style: "Regular" };
+      }
+
+      pageSectionFrame.appendChild(entryText);
+
+      // 5. Toast notification
+      figma.notify("Log entry created", { timeout: 2000 });
+
+    } catch (err: any) {
+      console.error("Log Error:", err);
+      figma.notify("Failed to log entry: " + err.message);
     }
   };
 
@@ -386,12 +533,13 @@ function PBIWidget() {
         <Rectangle width="fill-parent" height={1} fill={{ type: 'solid', color: '#000000', opacity: 0 }} />
 
         <AutoLayout spacing={8}>
-          <ActionButton label="Open" onClick={() => {
+          <ActionButton label="View" onClick={() => {
             const url = widgetState.pbiInfo?.url || `https://dev.azure.com/${widgetState.pbiInfo.organization}/${widgetState.pbiInfo.project}/_workitems/edit/${widgetState.pbiInfo.workItemId}`;
             return new Promise(() => figma.openExternal(url));
           }} />
-          <ActionButton label="Refresh" onClick={handleRefresh} />
-          <ActionButton label="Settings" onClick={handleOpenUI} />
+          <ActionButton label="Sync" onClick={handleRefresh} />
+          <ActionButton label="Menu" onClick={handleOpenUI} />
+          <ActionButton label="Log" onClick={handleLog} />
         </AutoLayout>
       </AutoLayout>
     </AutoLayout >

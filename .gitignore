@@ -11,3 +11,5 @@ azure-devops-worker/
 private-backend-source.zip
 .npm_cache
 bundle_v2.js
+bundle_v3.js
+.npm-local/

@@ -4,9 +4,11 @@
   "api": "1.0.0",
   "widgetApi": "1.0.0",
   "containsWidget": true,
-  "main": "bundle_v2.js",
+  "main": "bundle_v3.js",
   "ui": "ui.html",
-  "permissions": [],
+  "permissions": [
+    "currentuser"
+  ],
   "capabilities": [],
   "enableProposedApi": false,
   "documentAccess": "dynamic-page",
