@@ -15,7 +15,7 @@ const mockClientStorage = {
 };
 
 import { ConfigStorageService } from '../../src/services/configStorage';
-import { EncryptionService } from '../../src/utils/encryption';
+import * as EncryptionService from '../../src/utils/encryption';
 
 describe('Feature: figma-devops-integration, Config Storage Service', () => {
   const STORAGE_KEY = 'azure_devops_config';
@@ -38,11 +38,11 @@ describe('Feature: figma-devops-integration, Config Storage Service', () => {
         async ({ pat, organization, acPattern }) => {
           mockClientStorage.setAsync.mockClear();
           mockClientStorage.getAsync.mockClear();
-          
+
           mockClientStorage.setAsync.mockResolvedValue(undefined);
-          mockClientStorage.getAsync.mockImplementation((key) => {
+          mockClientStorage.getAsync.mockImplementation(async (key) => {
             if (key === STORAGE_KEY) {
-              const encryptedPat = EncryptionService.encryptPAT(pat);
+              const encryptedPat = await EncryptionService.encryptPAT(pat);
               const storedData = {
                 encryptedPat,
                 organization,
@@ -61,7 +61,7 @@ describe('Feature: figma-devops-integration, Config Storage Service', () => {
           expect(key).toBe(STORAGE_KEY);
 
           expect(storedValue).not.toContain(pat);
-          
+
           const retrievedConfig = await ConfigStorageService.retrieveConfig();
           expect(retrievedConfig).toBeDefined();
           expect(retrievedConfig!.pat).toBe(pat);
@@ -86,11 +86,11 @@ describe('Feature: figma-devops-integration, Config Storage Service', () => {
         }),
         async ({ invalidPat, organization, acPattern }) => {
           mockClientStorage.setAsync.mockClear();
-          
+
           await expect(ConfigStorageService.storeConfig({ pat: invalidPat, organization, acPattern: acPattern as string | undefined }))
             .rejects
             .toThrow('Invalid PAT format');
-          
+
           expect(mockClientStorage.setAsync).not.toHaveBeenCalled();
         }
       ), { numRuns: 3 });
@@ -109,18 +109,18 @@ describe('Feature: figma-devops-integration, Config Storage Service', () => {
           mockClientStorage.setAsync.mockClear();
           mockClientStorage.deleteAsync.mockClear();
           mockClientStorage.getAsync.mockClear();
-          
+
           mockClientStorage.setAsync.mockResolvedValue(undefined);
           mockClientStorage.deleteAsync.mockResolvedValue(undefined);
 
-          const encryptedPat = EncryptionService.encryptPAT(pat);
+          const encryptedPat = await EncryptionService.encryptPAT(pat);
           const storedData = {
             encryptedPat,
             organization,
             acPattern,
             createdAt: new Date().toISOString(),
           };
-          
+
           mockClientStorage.getAsync
             .mockResolvedValueOnce(JSON.stringify(storedData))
             .mockResolvedValue(null);

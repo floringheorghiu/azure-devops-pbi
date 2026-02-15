@@ -22,16 +22,16 @@ describe('Feature: figma-devops-integration, Azure DevOps Client', () => {
     test('should use HTTPS exclusively for all API calls', async () => {
       await fc.assert(fc.asyncProperty(
         fc.record({
-          pat: fc.string({ 
-            minLength: 52, 
-            maxLength: 52 
+          pat: fc.string({
+            minLength: 52,
+            maxLength: 52
           }).filter(s => /^[A-Za-z0-9+/]{52}$/.test(s)),
           organization: fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z0-9-]+$/.test(s))
         }),
         async ({ pat, organization }: { pat: string; organization: string }) => {
           // Reset mock for this iteration
           mockFetch.mockClear();
-          
+
           // Mock successful response
           mockFetch.mockResolvedValue({
             ok: true,
@@ -53,9 +53,9 @@ describe('Feature: figma-devops-integration, Azure DevOps Client', () => {
     test('should properly encode PAT in Authorization header without exposing it in URL', async () => {
       await fc.assert(fc.asyncProperty(
         fc.record({
-          pat: fc.string({ 
-            minLength: 52, 
-            maxLength: 52 
+          pat: fc.string({
+            minLength: 52,
+            maxLength: 52
           }).filter(s => /^[A-Za-z0-9+/]{52}$/.test(s)),
           pbiInfo: fc.record({
             organization: fc.string({ minLength: 3, maxLength: 20 }).filter(s => /^[a-zA-Z0-9-]+$/.test(s)),
@@ -67,7 +67,7 @@ describe('Feature: figma-devops-integration, Azure DevOps Client', () => {
         async ({ pat, pbiInfo }: { pat: string; pbiInfo: any }) => {
           // Reset mock for this iteration
           mockFetch.mockClear();
-          
+
           // Mock successful response
           mockFetch.mockResolvedValue({
             ok: true,
@@ -96,11 +96,11 @@ describe('Feature: figma-devops-integration, Azure DevOps Client', () => {
 
           // Verify PAT is not in URL
           expect(url).not.toContain(pat);
-          
+
           // Verify PAT is properly encoded in Authorization header
           expect(options.headers.Authorization).toMatch(/^Basic /);
           expect(options.headers.Authorization).not.toContain(pat); // Should be base64 encoded
-          
+
           // Verify the encoded header can be decoded to reveal the PAT
           const authHeader = options.headers.Authorization.replace('Basic ', '');
           const decoded = atob(authHeader);
@@ -112,16 +112,16 @@ describe('Feature: figma-devops-integration, Azure DevOps Client', () => {
     test('should not persist PAT values in any form during API calls', async () => {
       await fc.assert(fc.asyncProperty(
         fc.record({
-          pat: fc.string({ 
-            minLength: 52, 
-            maxLength: 52 
+          pat: fc.string({
+            minLength: 52,
+            maxLength: 52
           }).filter(s => /^[A-Za-z0-9+/]{52}$/.test(s)),
           organization: fc.string({ minLength: 3, maxLength: 20 })
         }),
         async ({ pat, organization }: { pat: string; organization: string }) => {
           // Reset mock for this iteration
           mockFetch.mockClear();
-          
+
           // Mock response
           mockFetch.mockResolvedValue({
             ok: true,
@@ -134,7 +134,7 @@ describe('Feature: figma-devops-integration, Azure DevOps Client', () => {
           // Verify the method doesn't store the PAT anywhere
           // (This is more of a design verification - the method should be stateless)
           expect(result).toBeDefined();
-          
+
           // Verify no global state or class properties were modified
           // (AzureDevOpsClient should be stateless)
           expect(Object.keys(AzureDevOpsClient)).toEqual(['length', 'name', 'prototype', 'API_VERSION', 'BASE_URL']);

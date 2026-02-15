@@ -68,10 +68,32 @@ export interface BackendResponse {
 // Plugin message types
 export interface PluginMessage {
   type: 'store-config' | 'create-widget' | 'clear-config' | 'create-mock-widget';
-  payload?: any;
+  payload?: unknown;
 }
 
 export interface UIMessage {
   type: 'config-stored' | 'init' | 'error';
-  payload?: any;
+  payload?: unknown;
+}
+
+export interface WorkItem {
+  id: number;
+  fields: {
+    'System.Title': string;
+    'System.State': string;
+    'System.Description'?: string;
+    'Microsoft.VSTS.Common.AcceptanceCriteria'?: string;
+    'System.AssignedTo'?: { displayName: string };
+    'System.ChangedDate': string;
+    'System.CreatedDate': string;
+    'System.WorkItemType': string;
+    'System.CreatedBy'?: { displayName: string };
+    'System.Tags'?: string;
+    'System.AreaPath'?: string;
+    'System.IterationPath'?: string;
+    'System.BoardColumn'?: string;
+    'System.BoardColumnDone'?: boolean;
+    'System.ChangedBy'?: { displayName: string };
+    [key: string]: unknown;
+  };
 }

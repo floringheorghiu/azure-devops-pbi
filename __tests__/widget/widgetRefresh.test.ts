@@ -38,7 +38,13 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
               creator: fc.string({ minLength: 1 }),
               createdDate: fc.date(),
               modifiedDate: fc.date(),
-              lastUpdated: fc.date()
+              lastUpdated: fc.date(),
+              tags: fc.array(fc.string({ maxLength: 20 })),
+              areaPath: fc.string({ maxLength: 50 }),
+              iterationPath: fc.string({ maxLength: 50 }),
+              boardColumn: fc.string({ maxLength: 30 }),
+              boardColumnDone: fc.boolean(),
+              changedBy: fc.string({ maxLength: 50 })
             }),
             lastRefresh: fc.option(fc.date(), { nil: null }),
             isLoading: fc.constant(false),
@@ -68,7 +74,13 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
               creator: fc.string({ minLength: 1 }),
               createdDate: fc.date(),
               modifiedDate: fc.date(),
-              lastUpdated: fc.date()
+              lastUpdated: fc.date(),
+              tags: fc.array(fc.string({ maxLength: 20 })),
+              areaPath: fc.string({ maxLength: 50 }),
+              iterationPath: fc.string({ maxLength: 50 }),
+              boardColumn: fc.string({ maxLength: 30 }),
+              boardColumnDone: fc.boolean(),
+              changedBy: fc.string({ maxLength: 50 })
             }),
             lastRefresh: fc.option(fc.date(), { nil: null }),
             isLoading: fc.constant(false),
@@ -91,7 +103,13 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
             creator: fc.string({ minLength: 1 }),
             createdDate: fc.date(),
             modifiedDate: fc.date(),
-            lastUpdated: fc.date()
+            lastUpdated: fc.date(),
+            tags: fc.array(fc.string({ maxLength: 20 })),
+            areaPath: fc.string({ maxLength: 50 }),
+            iterationPath: fc.string({ maxLength: 50 }),
+            boardColumn: fc.string({ maxLength: 30 }),
+            boardColumnDone: fc.boolean(),
+            changedBy: fc.string({ maxLength: 50 })
           })
         }),
         async ({ widget1State, widget2State, updatedData }) => {
@@ -106,23 +124,23 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
             pat: 'valid-pat-token',
             acPattern: ''
           });
-                    mockPBIValidationService.validatePBI.mockImplementation(async (pbiInfo: ParsedPBIInfo, pat: string) => {
-                      if (pbiInfo.workItemId === widget1State.pbiInfo.workItemId) {
-                        return {
-                          isValid: true,
-                          data: { ...updatedData, id: widget1State.pbiInfo.workItemId as number }
-                        };
-                      } else {
-                        return {
-                          isValid: true,
-                          data: widget2State.currentData || undefined // Changed null to undefined
-                        };
-                      }
-                    });
+          mockPBIValidationService.validatePBI.mockImplementation(async (pbiInfo: ParsedPBIInfo, pat: string) => {
+            if (pbiInfo.workItemId === widget1State.pbiInfo.workItemId) {
+              return {
+                isValid: true,
+                data: { ...updatedData, id: widget1State.pbiInfo.workItemId as number }
+              };
+            } else {
+              return {
+                isValid: true,
+                data: widget2State.currentData || undefined // Changed null to undefined
+              };
+            }
+          });
 
           // Simulate widget 1 refresh
           const refreshResult1 = await simulateWidgetRefresh(widget1State);
-          
+
           // Simulate widget 2 state (unchanged)
           const widget2StateAfter = { ...widget2State };
 
@@ -166,7 +184,13 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
                 creator: fc.string({ minLength: 1 }),
                 createdDate: fc.date(),
                 modifiedDate: fc.date(),
-                lastUpdated: fc.date()
+                lastUpdated: fc.date(),
+                tags: fc.array(fc.string({ maxLength: 20 })),
+                areaPath: fc.string({ maxLength: 50 }),
+                iterationPath: fc.string({ maxLength: 50 }),
+                boardColumn: fc.string({ maxLength: 30 }),
+                boardColumnDone: fc.boolean(),
+                changedBy: fc.string({ maxLength: 50 })
               }),
               lastRefresh: fc.option(fc.date(), { nil: null }),
               isLoading: fc.constant(false),
@@ -253,7 +277,13 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
               creator: fc.string({ minLength: 1 }),
               createdDate: fc.date(),
               modifiedDate: fc.date(),
-              lastUpdated: fc.date()
+              lastUpdated: fc.date(),
+              tags: fc.array(fc.string({ maxLength: 20 })),
+              areaPath: fc.string({ maxLength: 50 }),
+              iterationPath: fc.string({ maxLength: 50 }),
+              boardColumn: fc.string({ maxLength: 30 }),
+              boardColumnDone: fc.boolean(),
+              changedBy: fc.string({ maxLength: 50 })
             }),
             lastRefresh: fc.option(fc.date(), { nil: null }),
             isLoading: fc.constant(false),
@@ -345,7 +375,13 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
               creator: fc.string({ minLength: 1 }),
               createdDate: fc.date(),
               modifiedDate: fc.date(),
-              lastUpdated: fc.date()
+              lastUpdated: fc.date(),
+              tags: fc.array(fc.string({ maxLength: 20 })),
+              areaPath: fc.string({ maxLength: 50 }),
+              iterationPath: fc.string({ maxLength: 50 }),
+              boardColumn: fc.string({ maxLength: 30 }),
+              boardColumnDone: fc.boolean(),
+              changedBy: fc.string({ maxLength: 50 })
             }),
             lastRefresh: fc.option(fc.date(), { nil: null }),
             isLoading: fc.constant(false),
@@ -368,7 +404,13 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
             creator: fc.string({ minLength: 1 }),
             createdDate: fc.date(),
             modifiedDate: fc.date(),
-            lastUpdated: fc.date()
+            lastUpdated: fc.date(),
+            tags: fc.array(fc.string({ maxLength: 20 })),
+            areaPath: fc.string({ maxLength: 50 }),
+            iterationPath: fc.string({ maxLength: 50 }),
+            boardColumn: fc.string({ maxLength: 30 }),
+            boardColumnDone: fc.boolean(),
+            changedBy: fc.string({ maxLength: 50 })
           })
         }),
         async ({ widgetState, updatedData }) => {
@@ -419,7 +461,13 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
           creator: 'Test User',
           createdDate: new Date(),
           modifiedDate: new Date(),
-          lastUpdated: new Date()
+          lastUpdated: new Date(),
+          tags: [],
+          areaPath: 'Project\\Area',
+          iterationPath: 'Project\\Iteration',
+          boardColumn: 'Doing',
+          boardColumnDone: false,
+          changedBy: 'Test User'
         },
         lastRefresh: null,
         isLoading: false,
@@ -453,12 +501,12 @@ describe('Feature: figma-devops-integration, Widget Refresh', () => {
 
       // Start refresh and check loading state
       const refreshPromise = simulateWidgetRefresh(widgetState);
-      
+
       // Verify loading state is set initially
       // (In real implementation, this would be checked during the refresh process)
-      
+
       const result = await refreshPromise;
-      
+
       // Verify final state
       expect(result.success).toBe(true);
       expect(result.newState?.isLoading).toBe(false);
@@ -490,12 +538,12 @@ async function simulateWidgetRefresh(widgetState: WidgetState): Promise<{
 
     // Validate and fetch fresh PBI data
     const validationResult = await mockPBIValidationService.validatePBI(widgetState.pbiInfo, config.pat);
-    
+
     if (!validationResult.isValid || !validationResult.data) {
-      const errorMessage = validationResult.error 
+      const errorMessage = validationResult.error
         ? validationResult.error.userMessage
         : 'Unable to refresh work item data';
-      
+
       throw new Error(errorMessage);
     }
 

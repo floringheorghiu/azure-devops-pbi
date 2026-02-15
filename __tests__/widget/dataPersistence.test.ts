@@ -42,7 +42,13 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
               creator: fc.string({ minLength: 1, maxLength: 100 }),
               createdDate: fc.date(),
               modifiedDate: fc.date(),
-              lastUpdated: fc.date()
+              lastUpdated: fc.date(),
+              tags: fc.array(fc.string({ maxLength: 20 })),
+              areaPath: fc.string({ maxLength: 50 }),
+              iterationPath: fc.string({ maxLength: 50 }),
+              boardColumn: fc.string({ maxLength: 30 }),
+              boardColumnDone: fc.boolean(),
+              changedBy: fc.string({ maxLength: 50 })
             }),
             lastRefresh: fc.option(fc.date(), { nil: null }),
             isLoading: fc.boolean(),
@@ -59,12 +65,12 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
         ({ widgetState }: { widgetState: WidgetState }) => {
           // Simulate storing state
           let storedState: WidgetState | null = null;
-          
+
           mockUseSyncedState.mockImplementation((key: string, defaultValue: WidgetState) => {
             if (storedState === null) {
               storedState = { ...widgetState };
             }
-            
+
             return [
               storedState,
               (newState: WidgetState) => {
@@ -75,29 +81,29 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
 
           // Simulate widget initialization
           const [state, setState] = mockUseSyncedState('widgetState', widgetState);
-          
+
           // Verify initial state matches input
           expect(state).toEqual(widgetState);
-          
+
           // Simulate state update
           const updatedState: WidgetState = {
             ...widgetState,
             isLoading: !widgetState.isLoading,
             lastRefresh: new Date()
           };
-          
+
           setState(updatedState);
-          
+
           // Simulate widget re-initialization (persistence test)
           const [restoredState] = mockUseSyncedState('widgetState', widgetState);
-          
+
           // Verify state was persisted correctly
           expect(restoredState.pbiInfo).toEqual(updatedState.pbiInfo);
           expect(restoredState.currentData).toEqual(updatedState.currentData);
           expect(restoredState.isLoading).toBe(updatedState.isLoading);
           expect(restoredState.error).toEqual(updatedState.error);
           expect(restoredState.displayMode).toBe(updatedState.displayMode);
-          
+
           // Verify dates are preserved (within reasonable tolerance)
           if (updatedState.lastRefresh && restoredState.lastRefresh) {
             const timeDiff = Math.abs(
@@ -122,14 +128,20 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
             creator: fc.string({ minLength: 1, maxLength: 50 }),
             createdDate: fc.date(),
             modifiedDate: fc.date(),
-            lastUpdated: fc.date()
+            lastUpdated: fc.date(),
+            tags: fc.array(fc.string({ maxLength: 20 })),
+            areaPath: fc.string({ maxLength: 50 }),
+            iterationPath: fc.string({ maxLength: 50 }),
+            boardColumn: fc.string({ maxLength: 30 }),
+            boardColumnDone: fc.boolean(),
+            changedBy: fc.string({ maxLength: 50 })
           })
         }),
         ({ pbiData }: { pbiData: PBIData }) => {
           // Simulate JSON serialization/deserialization (what Figma does internally)
           const serialized = JSON.stringify(pbiData);
           const deserialized = JSON.parse(serialized);
-          
+
           // Verify all primitive fields are preserved
           expect(deserialized.id).toBe(pbiData.id);
           expect(deserialized.title).toBe(pbiData.title);
@@ -137,10 +149,10 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
           expect(deserialized.description).toBe(pbiData.description);
           expect(deserialized.workItemType).toBe(pbiData.workItemType);
           expect(deserialized.creator).toBe(pbiData.creator);
-          
+
           // Verify arrays are preserved
           expect(deserialized.acceptanceCriteria).toEqual(pbiData.acceptanceCriteria);
-          
+
           // Verify dates can be reconstructed
           expect(new Date(deserialized.createdDate)).toEqual(pbiData.createdDate);
           expect(new Date(deserialized.modifiedDate)).toEqual(pbiData.modifiedDate);
@@ -173,7 +185,13 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
               creator: fc.string({ minLength: 1 }),
               createdDate: fc.date(),
               modifiedDate: fc.date(),
-              lastUpdated: fc.date()
+              lastUpdated: fc.date(),
+              tags: fc.array(fc.string()),
+              areaPath: fc.string(),
+              iterationPath: fc.string(),
+              boardColumn: fc.string(),
+              boardColumnDone: fc.boolean(),
+              changedBy: fc.string()
             }),
             lastRefresh: fc.option(fc.date(), { nil: null }),
             isLoading: fc.boolean(),
@@ -192,9 +210,9 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
           const incompleteState = {
             ...baseState,
           };
-          
+
           mockUseSyncedState.mockReturnValue([incompleteState, jest.fn()]);
-          
+
           // Widget should handle missing fields by providing defaults
           const [state] = mockUseSyncedState('widgetState', {
             pbiInfo: baseState.pbiInfo!,
@@ -205,7 +223,7 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
             displayMode: baseState.displayMode || 'expanded',
             acPattern: '' // Default for acPattern
           });
-          
+
           // Verify defaults are applied for missing fields
           expect(state.lastRefresh).toBeDefined(); // Should be null or a date
           expect(typeof state.isLoading).toBe('boolean');
@@ -241,17 +259,17 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
         displayMode: 'expanded',
         acPattern: '' // Added for consistency
         // Missing: lastRefresh, isLoading, error
-      };
+      } as unknown as WidgetState;
 
       // Simulate widget loading old format
       mockUseSyncedState.mockReturnValue([oldFormatState, jest.fn()]);
-      
+
       const defaultState: WidgetState = {
         pbiInfo: oldFormatState.pbiInfo,
         currentData: {
           ...oldFormatState.currentData,
           acceptanceCriteria: [],
-          modifiedDate: oldFormatState.currentData.lastUpdated,
+          modifiedDate: oldFormatState.currentData!.lastUpdated,
           assignedTo: undefined
         } as PBIData,
         lastRefresh: null,
@@ -261,7 +279,7 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
       };
 
       const [state] = mockUseSyncedState('widgetState', defaultState);
-      
+
       // Verify migration provides sensible defaults
       expect(state.currentData.acceptanceCriteria).toBeDefined();
       expect(Array.isArray(state.currentData.acceptanceCriteria)).toBe(true);
@@ -285,7 +303,7 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
 
       invalidStates.forEach(invalidState => {
         mockUseSyncedState.mockReturnValue([invalidState, jest.fn()]);
-        
+
         // Widget should handle invalid state gracefully
         expect(() => {
           const [state] = mockUseSyncedState('widgetState', {
@@ -323,7 +341,13 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
           creator: 'Test User',
           createdDate: new Date(),
           modifiedDate: new Date(),
-          lastUpdated: new Date()
+          lastUpdated: new Date(),
+          tags: [],
+          areaPath: 'Project\\Area',
+          iterationPath: 'Project\\Iteration',
+          boardColumn: 'Doing',
+          boardColumnDone: false,
+          changedBy: 'Test User'
         },
         lastRefresh: new Date(),
         isLoading: false,
@@ -333,12 +357,12 @@ describe('Feature: figma-devops-integration, Widget Data Persistence', () => {
 
       // Simulate persistence of large state
       let storedState: WidgetState | null = null;
-      
+
       mockUseSyncedState.mockImplementation((key: string, defaultValue: WidgetState) => {
         if (storedState === null) {
           storedState = { ...largeState };
         }
-        
+
         return [
           storedState,
           (newState: WidgetState) => {

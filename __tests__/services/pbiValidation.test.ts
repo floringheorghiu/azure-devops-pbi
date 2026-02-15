@@ -42,18 +42,46 @@ describe('Feature: figma-devops-integration, PBI Validation Service', () => {
       ];
 
       invalidCases.forEach(invalidCase => {
-        const result = PBIValidationService.validatePBIInfoStructure(invalidCase as any);
+        const result = PBIValidationService.validatePBIInfoStructure(invalidCase as unknown as ParsedPBIInfo);
         expect(result).toBe(false);
       });
     });
 
     test('should validate organization and project naming rules', () => {
-      const validNames = ['test', 'test-org', 'test_org', 'test.org', 'test123', '123test'];
-      const invalidNames = ['-test', 'test-', '_test', 'test_', '.test', 'test.', 'te st', ''];
+      // Organization names: Alphanumeric, hyphens. No underscores, dots, or spaces.
+      const validOrgNames = ['test', 'test-org', 'test123', '123test'];
+      const invalidOrgNames = ['test_org', 'test.org', 'te st', '-test', 'test-', '_test', 'test_', '.test', 'test.', ''];
 
-      validNames.forEach(name => {
+      // Project names: Alphanumeric, spaces, hyphens, underscores, periods.
+      const validProjectNames = ['test', 'test project', 'test_project', 'test.project', 'test-project'];
+      const invalidProjectNames = ['-test', 'test-', '_test', 'test_', '.test', 'test.', ''];
+
+      // Test Valid Organizations
+      validOrgNames.forEach(name => {
         const pbiInfo: ParsedPBIInfo = {
           organization: name,
+          project: 'validproject',
+          workItemId: 1,
+          url: 'https://dev.azure.com/test/test/_workitems/edit/1'
+        };
+        expect(PBIValidationService.validatePBIInfoStructure(pbiInfo)).toBe(true);
+      });
+
+      // Test Invalid Organizations
+      invalidOrgNames.forEach(name => {
+        const pbiInfo: ParsedPBIInfo = {
+          organization: name,
+          project: 'validproject',
+          workItemId: 1,
+          url: 'https://dev.azure.com/test/test/_workitems/edit/1'
+        };
+        expect(PBIValidationService.validatePBIInfoStructure(pbiInfo)).toBe(false);
+      });
+
+      // Test Valid Projects
+      validProjectNames.forEach(name => {
+        const pbiInfo: ParsedPBIInfo = {
+          organization: 'validorg',
           project: name,
           workItemId: 1,
           url: 'https://dev.azure.com/test/test/_workitems/edit/1'
@@ -61,10 +89,11 @@ describe('Feature: figma-devops-integration, PBI Validation Service', () => {
         expect(PBIValidationService.validatePBIInfoStructure(pbiInfo)).toBe(true);
       });
 
-      invalidNames.forEach(name => {
+      // Test Invalid Projects
+      invalidProjectNames.forEach(name => {
         const pbiInfo: ParsedPBIInfo = {
-          organization: name,
-          project: 'validproject',
+          organization: 'validorg',
+          project: name,
           workItemId: 1,
           url: 'https://dev.azure.com/test/test/_workitems/edit/1'
         };
@@ -92,7 +121,13 @@ describe('Feature: figma-devops-integration, PBI Validation Service', () => {
         creator: 'Test User',
         createdDate: new Date(),
         modifiedDate: new Date(),
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
+        tags: ['tag1'],
+        areaPath: 'Project\\Area',
+        iterationPath: 'Project\\Iteration',
+        boardColumn: 'Doing',
+        boardColumnDone: false,
+        changedBy: 'Test User'
       };
 
       mockAzureDevOpsClient.getPBIData.mockResolvedValue(mockPBIData);
@@ -171,7 +206,13 @@ describe('Feature: figma-devops-integration, PBI Validation Service', () => {
         creator: 'Test User',
         createdDate: new Date(),
         modifiedDate: new Date(),
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
+        tags: ['tag1'],
+        areaPath: 'Project\\Area',
+        iterationPath: 'Project\\Iteration',
+        boardColumn: 'Doing',
+        boardColumnDone: false,
+        changedBy: 'Test User'
       };
 
       mockAzureDevOpsClient.getPBIData.mockResolvedValue(mockPBIData);
@@ -255,7 +296,13 @@ describe('Feature: figma-devops-integration, PBI Validation Service', () => {
         creator: 'Test User',
         createdDate: new Date(),
         modifiedDate: new Date(),
-        lastUpdated: new Date()
+        lastUpdated: new Date(),
+        tags: ['tag1'],
+        areaPath: 'Project\\Area',
+        iterationPath: 'Project\\Iteration',
+        boardColumn: 'Doing',
+        boardColumnDone: false,
+        changedBy: 'Test User'
       };
 
       mockAzureDevOpsClient.getPBIData.mockResolvedValue(mockPBIData);

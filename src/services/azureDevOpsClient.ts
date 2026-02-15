@@ -1,5 +1,5 @@
 import { base64Encode } from '../utils/encryption';
-import { ParsedPBIInfo, PBIData, APIError } from '../types';
+import { ParsedPBIInfo, PBIData, APIError, WorkItem } from '../types';
 import { ValidationService } from '../utils/validation';
 
 export class AzureDevOpsClient {
@@ -43,10 +43,7 @@ export class AzureDevOpsClient {
     // If PATs can contain symbols, we should verify, but for now this fixes the "invisible char" issue.
     const cleanPat = pat.replace(/[^a-zA-Z0-9]/g, '');
 
-    if (cleanPat.length !== pat.length) {
-      console.warn(`AzureDevOpsClient: Sanitized ${pat.length - cleanPat.length} invalid characters from PAT`);
-      console.log(`AzureDevOpsClient: Original Len: ${pat.length}, Clean Len: ${cleanPat.length}`);
-    }
+
 
     const credentials = base64Encode(`:${cleanPat}`);
     return `Basic ${credentials}`;
@@ -59,7 +56,7 @@ export class AzureDevOpsClient {
    * @returns PBI data or throws APIError
    */
   static async getPBIData(pbiInfo: ParsedPBIInfo, pat: string): Promise<PBIData> {
-    console.log('AzureDevOpsClient: Starting fetch for', pbiInfo.workItemId);
+
 
     try {
       // Encode URL components to handle spaces in Project names
@@ -67,10 +64,7 @@ export class AzureDevOpsClient {
       const proj = encodeURIComponent(pbiInfo.project);
       const url = `${this.BASE_URL}/${org}/${proj}/_apis/wit/workitems/${pbiInfo.workItemId}?api-version=${this.API_VERSION}`;
 
-      console.log(`AzureDevOpsClient: Fetching URL: ${url}`);
-
       const authHeader = this.createAuthHeader(pat);
-      console.log(`AzureDevOpsClient: Auth Header generated (Len: ${authHeader.length})`);
 
       // Use Promise.race for timeout since AbortController is not supported in Figma's QuickJS
       const fetchPromise = fetch(url, {
@@ -88,8 +82,6 @@ export class AzureDevOpsClient {
 
       const response = await Promise.race([fetchPromise, timeoutPromise]);
 
-      console.log('AzureDevOpsClient: Response received', response.status); // TRACE API
-
       if (!response.ok) {
         throw await this.handleAPIError(response);
       }
@@ -99,8 +91,13 @@ export class AzureDevOpsClient {
 
     } catch (error: unknown) {
       console.error('getPBIData: Error caught during PBI data retrieval:', error);
-      if (error instanceof Error && 'code' in error) {
+
+      if (ValidationService.validateAPIError(error)) {
         throw error; // Re-throw APIError
+      }
+
+      if (error instanceof Error && 'code' in error) {
+        throw error; // Re-throw other errors with code
       }
 
       throw ValidationService.createAPIError(
@@ -199,7 +196,7 @@ export class AzureDevOpsClient {
    * @param workItem Raw work item from Azure DevOps API
    * @returns Formatted PBI data
    */
-  private static transformWorkItem(workItem: any): PBIData {
+  private static transformWorkItem(workItem: WorkItem): PBIData {
     const fields = workItem.fields || {};
 
     // Extract acceptance criteria and convert from HTML

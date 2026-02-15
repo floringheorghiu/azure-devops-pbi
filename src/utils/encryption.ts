@@ -5,6 +5,7 @@ import * as forge from 'node-forge';
 // Actually, forge has util.encode64.
 // Let's implement the interface using forge.
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 declare const figma: any;
 
 const KEY_STORAGE_NAME = 'pbi_plugin_encryption_key_v2'; // Changed key name to force fresh start with new format
@@ -99,5 +100,6 @@ export async function decryptPAT(encryptedToken: string): Promise<string | null>
 }
 
 export function validatePATFormat(token: string): boolean {
-  return token.trim().length > 0;
+  // Azure DevOps PATs are typically 52 characters long and Base64 encoded
+  return /^[A-Za-z0-9+/]{52}$/.test(token);
 }

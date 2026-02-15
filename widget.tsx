@@ -1,5 +1,5 @@
 import './src/utils/polyfill'; // Must be first to mock environment for node-forge
-import { WidgetState, PBIData, APIError, PluginMessage } from './src/types';
+import { WidgetState, PBIData, PluginMessage } from './src/types';
 import { ConfigStorageService } from './src/services/configStorage';
 import { PBIValidationService } from './src/services/pbiValidation';
 import { AzureDevOpsURLParser } from './src/utils/urlParser';
@@ -8,7 +8,7 @@ declare const figma: any;
 declare const __html__: string;
 
 const { widget } = figma;
-const { useSyncedState, usePropertyMenu, useWidgetId, AutoLayout, Text, Rectangle, SVG, h, Fragment, useEffect, waitForTask } = (widget || {}) as any;
+const { useSyncedState, useWidgetId, AutoLayout, Text, Rectangle, SVG, useEffect, waitForTask, h, Fragment } = (widget || {}) as any;
 
 // Shared state for routing UI messages to the correct widget instance
 let activeInstanceUpdateHandler: ((url: string) => Promise<void>) | null = null;
@@ -30,7 +30,7 @@ function getStateColor(state: string): { bg: string; text: string } {
     'In Progress': { bg: '#FFF4CE', text: '#795500' },
     'default': { bg: '#F3F2F1', text: '#1F1F1F' }
   };
-  return (stateColors as any)[state] || stateColors.default;
+  return (stateColors as Record<string, { bg: string; text: string }>)[state] || stateColors.default;
 }
 
 function truncateText(text: string, maxLength: number): string {
@@ -38,7 +38,7 @@ function truncateText(text: string, maxLength: number): string {
   return text.substring(0, maxLength) + '…';
 }
 
-function formatRelativeTime(dateInput: any): string {
+function formatRelativeTime(dateInput: Date | string | number | null | undefined): string {
   try {
     if (!dateInput) return '';
     // Force conversion to Date object in case it's a plain serialized object
@@ -58,8 +58,8 @@ function formatRelativeTime(dateInput: any): string {
   }
 }
 
-const handleStoreConfig = async (payload: any) => {
-  await ConfigStorageService.storeConfig(payload);
+const handleStoreConfig = async (payload: { [key: string]: string | number | boolean }) => {
+  await ConfigStorageService.storeConfig(payload as any);
   if (figma.ui) {
     figma.ui.postMessage({ type: 'config-stored', payload: { success: true } });
   }
@@ -196,8 +196,8 @@ function PBIWidget() {
         isLoading: false,
         error: {
           code: 'REFRESH_ERROR',
-          message: (err as any).message,
-          userMessage: (err as any).message,
+          message: (err as Error).message,
+          userMessage: (err as Error).message,
           retryable: true,
         },
       });
@@ -264,13 +264,13 @@ function PBIWidget() {
       // Actually, user wants grouping. So let's look for a frame named `Page: ${currentPageName}`?
       // Screenshot looks like a flat list with Headers.
 
-      let targetInsertIndex = containerFrame.children.length;
-      let foundPageSection = false;
+      const targetInsertIndex = containerFrame.children.length;
+      const foundPageSection = false;
 
       // Iterate children to find if we already have a section for this page
       // This is tricky in a flat list. Let's create a FRAME for each Page Section to make it easier.
 
-      let pageSectionFrame = containerFrame.children.find((n: any) => n.name === `Section: ${currentPageName}` && n.type === "FRAME");
+      let pageSectionFrame = containerFrame.children.find((n: SceneNode) => n.name === `Section: ${currentPageName}` && n.type === "FRAME") as FrameNode;
 
       if (!pageSectionFrame) {
         pageSectionFrame = figma.createFrame();
@@ -301,7 +301,7 @@ function PBIWidget() {
 
       // Format: November 17, 2025; designer: Florin G.; #2180858: (GM) PAS Details Screen...
       const now = new Date();
-      const options: any = { year: 'numeric', month: 'long', day: 'numeric' };
+      const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
       const dateStr = now.toLocaleDateString('en-US', options);
 
       const userName = figma.currentUser ? figma.currentUser.name : "Unknown User";
@@ -324,7 +324,7 @@ function PBIWidget() {
       if (titleIndex !== -1) {
         entryText.setRangeTextDecoration(titleIndex, titleIndex + pbiTitle.length, "UNDERLINE");
         if (widgetId) {
-          // @ts-ignore
+          // setRangeHyperlink is valid in Widget API but maybe missing in typings, or corrected now
           entryText.setRangeHyperlink(titleIndex, titleIndex + pbiTitle.length, { type: 'NODE', value: widgetId });
         }
         // Make ID bold? Screenshot shows ID bold-ish or just distinct? Screenshot: "#2180858: ..." looks bold.
@@ -344,9 +344,9 @@ function PBIWidget() {
       // 5. Toast notification
       figma.notify("Log entry created", { timeout: 2000 });
 
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Log Error:", err);
-      figma.notify("Failed to log entry: " + err.message);
+      figma.notify("Failed to log entry: " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -385,7 +385,7 @@ function PBIWidget() {
   // Helper to safely strip HTML for Figma Text
   const stripHtml = (html: string) => {
     if (!html) return '';
-    let text = html
+    const text = html
       .replace(/<br\s*\/?>/gi, '\n')
       .replace(/<\/p>/gi, '\n\n')
       .replace(/<\/div>/gi, '\n')
@@ -394,7 +394,7 @@ function PBIWidget() {
   };
 
   if (widgetState.isLoading) return <LoadingState />;
-  if (widgetState.error) return <ErrorState error={widgetState.error as any} onRetry={handleRefresh} onConfigure={handleOpenUI} />;
+  if (widgetState.error) return <ErrorState error={widgetState.error} onRetry={handleRefresh} onConfigure={handleOpenUI} />;
 
   // Smart Widget Empty State
   if (!widgetState.currentData) {
@@ -557,7 +557,7 @@ const ToggleCheck = ({ isDone, onToggle }: { isDone: boolean, onToggle: () => vo
     fill={isDone ? "#107C10" : "#FFFFFF"}
     horizontalAlignItems="center"
     verticalAlignItems="center"
-    onClick={(e: any) => {
+    onClick={() => {
       // In Figma Widgets, returning a Promise that resolves prevents interactions from bubbling?
       // Actually, standard behavior is touch/click on child handles it.
       return new Promise((resolve) => {
@@ -574,7 +574,7 @@ const ToggleCheck = ({ isDone, onToggle }: { isDone: boolean, onToggle: () => vo
   </AutoLayout>
 );
 
-const AccordionItem = ({ content, isExpanded, isDone, onClick, onToggle, key }: { content: string, isExpanded: boolean, isDone: boolean, onClick: () => void, onToggle: () => void, key?: any }) => (
+const AccordionItem = ({ content, isExpanded, isDone, onClick, onToggle }: { content: string, isExpanded: boolean, isDone: boolean, onClick: () => void, onToggle: () => void, key?: any }) => (
   <AutoLayout direction="vertical" width="fill-parent" stroke="#EEE" cornerRadius={4} hoverStyle={{ bg: '#F7F7F7' }} cursor="pointer">
     {/* Header Section: Text + Toggle */}
     < AutoLayout
@@ -596,20 +596,18 @@ const AccordionItem = ({ content, isExpanded, isDone, onClick, onToggle, key }: 
   </AutoLayout >
 );
 
-const LoadingState = () => <BaseState><Text>Loading PBI...</Text></BaseState>;
-const EmptyState = ({ onConfigure }: { onConfigure: () => void }) => (
-  <BaseState>
-    <AutoLayout direction="vertical" horizontalAlignItems="center" spacing={8}>
-      <Text fontWeight={600}>No PBI Loaded</Text>
-      <Text fontSize={11} fill="#666" horizontalAlignText="center">Open the 'Azure DevOps' plugin to select a PBI</Text>
-      <ActionButton label="Configure" onClick={onConfigure} />
-    </AutoLayout >
-  </BaseState >
+const BaseState = ({ children }: { children?: any }) => (
+  <AutoLayout width={340} height={200} verticalAlignItems="center" horizontalAlignItems="center" fill="#F7F7F7" cornerRadius={8}>
+    {children}
+  </AutoLayout >
 );
-const ErrorState = ({ error, onRetry, onConfigure }: { error: any, onRetry: () => void, onConfigure: () => void }) => (
+
+const LoadingState = () => <BaseState><Text>Loading PBI...</Text></BaseState>;
+// EmptyState removed as unused
+const ErrorState = ({ error, onRetry, onConfigure }: { error: { userMessage?: string }, onRetry: () => void, onConfigure: () => void }) => (
   <BaseState>
     <AutoLayout direction="vertical" horizontalAlignItems="center" spacing={8} padding={16}>
-      <Text fill="#D92C2C" horizontalAlignText="center">{(error as any).userMessage || 'An error occurred'}</Text>
+      <Text fill="#D92C2C" horizontalAlignText="center">{error.userMessage || 'An error occurred'}</Text>
       <AutoLayout spacing={12}>
         <Text onClick={onRetry} hoverStyle={{ textDecoration: 'underline' }} cursor="pointer">Retry</Text>
         <Text onClick={onConfigure} hoverStyle={{ textDecoration: 'underline' }} cursor="pointer">Configure</Text>
@@ -617,11 +615,7 @@ const ErrorState = ({ error, onRetry, onConfigure }: { error: any, onRetry: () =
     </AutoLayout >
   </BaseState >
 );
-const BaseState: any = ({ children }: { children: any }) => (
-  <AutoLayout width={340} height={200} verticalAlignItems="center" horizontalAlignItems="center" fill="#F7F7F7" cornerRadius={8}>
-    {children}
-  </AutoLayout >
-);
+
 
 
 // Helper for Accordion (duplicated strip because scope) or move stripHtml up?
@@ -655,7 +649,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
   try {
     switch (msg.type) {
       case 'store-config':
-        await handleStoreConfig(msg.payload);
+        await handleStoreConfig(msg.payload as any);
         // If we have an active instance update handler, use it
         if (activeInstanceUpdateHandler) {
           // await activeInstanceUpdateHandler(msg.payload.url); // Does this payload have URL? No, store-config payload is config.
@@ -681,16 +675,17 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         break;
       case 'create-widget':
         // Payload has URL
-        if (msg.payload.url) {
+        const payload = msg.payload as any;
+        if (payload.url) {
           // Fire and forget storage of the base URL
-          ConfigStorageService.storeLastBaseUrl(msg.payload.url).catch(console.error);
+          ConfigStorageService.storeLastBaseUrl(payload.url).catch(console.error);
         }
 
         if (activeInstanceUpdateHandler) {
-          await activeInstanceUpdateHandler(msg.payload.url);
+          await activeInstanceUpdateHandler(payload.url);
           figma.notify('Widget updated!');
         } else {
-          await figma.clientStorage.setAsync(PENDING_PBI_KEY, msg.payload.url);
+          await figma.clientStorage.setAsync(PENDING_PBI_KEY, payload.url);
           figma.notify("PBI Saved! Drag a new widget to see it.");
         }
         break;
@@ -701,8 +696,8 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
         await handleClearConfig();
         break;
     }
-  } catch (e: any) {
-    figma.notify('Error: ' + e.message);
+  } catch (e: unknown) {
+    figma.notify('Error: ' + (e instanceof Error ? e.message : String(e)));
   }
 };
 

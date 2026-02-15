@@ -3,6 +3,7 @@
 // which often lacks standard browser globals like 'window', 'self', or 'crypto'.
 // This polyfill ensures libraries like 'node-forge' can initialize without crashing.
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const safeGlobal = globalThis as any;
 
 // 1. Ensure 'global' exists (Node-style)
@@ -50,6 +51,7 @@ try {
                 } else {
                     // Fallback for generic view/buffer
                     console.warn('Unsupported buffer type for crypto polyfill');
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     const safeBuffer = buffer as any;
                     for (let i = 0; i < safeBuffer.length; i++) {
                         safeBuffer[i] = Math.floor(Math.random() * 256);
@@ -69,6 +71,7 @@ try {
         safeGlobal.process = {
             env: {},
             version: '',
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             nextTick: (cb: any) => setTimeout(cb, 0)
         };
     }

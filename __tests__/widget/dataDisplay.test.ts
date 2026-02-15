@@ -22,36 +22,42 @@ describe('Feature: figma-devops-integration, PBI Data Display', () => {
             creator: fc.string({ minLength: 1, maxLength: 100 }),
             createdDate: fc.date(),
             modifiedDate: fc.date(),
-            lastUpdated: fc.date()
+            lastUpdated: fc.date(),
+            tags: fc.array(fc.string({ maxLength: 20 })),
+            areaPath: fc.string({ maxLength: 50 }),
+            iterationPath: fc.string({ maxLength: 50 }),
+            boardColumn: fc.string({ maxLength: 30 }),
+            boardColumnDone: fc.boolean(),
+            changedBy: fc.string({ maxLength: 50 })
           }),
           displayMode: fc.constantFrom('compact', 'expanded')
         }),
         ({ pbiData, displayMode }: { pbiData: PBIData; displayMode: 'compact' | 'expanded' }) => {
           // Simulate widget display rendering
           const displayData = renderPBIData(pbiData, displayMode);
-          
+
           // Verify all required fields are present in display
           expect(displayData.id).toBe(pbiData.id);
           expect(displayData.title).toBe(pbiData.title);
           expect(displayData.state).toBe(pbiData.state);
           expect(displayData.workItemType).toBe(pbiData.workItemType);
           expect(displayData.creator).toBe(pbiData.creator);
-          
+
           // Verify dates are formatted properly
           expect(displayData.createdDate).toBeInstanceOf(Date);
           expect(displayData.modifiedDate).toBeInstanceOf(Date);
           expect(displayData.lastUpdated).toBeInstanceOf(Date);
-          
+
           // Verify optional fields are handled correctly
           if (pbiData.assignedTo) {
             expect(displayData.assignedTo).toBe(pbiData.assignedTo);
           } else {
             expect(displayData.assignedTo).toBeUndefined();
           }
-          
+
           // Verify arrays are preserved
           expect(displayData.acceptanceCriteria).toEqual(pbiData.acceptanceCriteria);
-          
+
           // Verify display mode affects rendering
           if (displayMode === 'compact') {
             // Compact mode should truncate long content
@@ -67,10 +73,10 @@ describe('Feature: figma-devops-integration, PBI Data Display', () => {
     test('should handle special characters and HTML content safely', () => {
       fc.assert(fc.property(
         fc.record({
-          title: fc.string({ minLength: 1, maxLength: 100 }).map(s => 
+          title: fc.string({ minLength: 1, maxLength: 100 }).map(s =>
             s + fc.sample(fc.constantFrom('<script>', '&lt;', '&gt;', '"', "'", '&amp;'), 1)[0]
           ),
-          description: fc.string({ maxLength: 500 }).map(s => 
+          description: fc.string({ maxLength: 500 }).map(s =>
             s + '<p>HTML content</p><script>alert("xss")</script>'
           ),
           acceptanceCriteria: fc.array(
@@ -89,21 +95,27 @@ describe('Feature: figma-devops-integration, PBI Data Display', () => {
             creator: 'Test User',
             createdDate: new Date(),
             modifiedDate: new Date(),
-            lastUpdated: new Date()
+            lastUpdated: new Date(),
+            tags: [],
+            areaPath: 'Project\\Area',
+            iterationPath: 'Project\\Iteration',
+            boardColumn: 'Doing',
+            boardColumnDone: false,
+            changedBy: 'Test User'
           };
-          
+
           const displayData = renderPBIData(pbiData, 'expanded');
-          
+
           // Verify HTML is sanitized
           expect(displayData.displayTitle).not.toContain('<script>');
           expect(displayData.displayDescription).not.toContain('<script>');
           expect(displayData.displayDescription).not.toContain('alert(');
-          
+
           // Verify HTML entities are handled
           expect(displayData.displayTitle).not.toContain('&lt;');
           expect(displayData.displayTitle).not.toContain('&gt;');
           expect(displayData.displayTitle).not.toContain('&amp;');
-          
+
           // Verify acceptance criteria are sanitized
           displayData.displayAcceptanceCriteria.forEach(criterion => {
             expect(criterion).not.toContain('<script>');
@@ -134,17 +146,23 @@ describe('Feature: figma-devops-integration, PBI Data Display', () => {
             creator: 'Test User',
             createdDate: new Date(),
             modifiedDate: new Date(),
-            lastUpdated: new Date()
+            lastUpdated: new Date(),
+            tags: [],
+            areaPath: 'Project\\Area',
+            iterationPath: 'Project\\Iteration',
+            boardColumn: 'Doing',
+            boardColumnDone: false,
+            changedBy: 'Test User'
           };
-          
+
           // Test compact mode truncation
           const compactDisplay = renderPBIData(pbiData, 'compact');
           expect(compactDisplay.displayTitle.length).toBeLessThanOrEqual(43); // 40 + "..."
-          
+
           // Test expanded mode truncation
           const expandedDisplay = renderPBIData(pbiData, 'expanded');
           expect(expandedDisplay.displayDescription.length).toBeLessThanOrEqual(203); // 200 + "..."
-          
+
           // Test acceptance criteria limiting
           expect(expandedDisplay.displayAcceptanceCriteria.length).toBeLessThanOrEqual(3);
           if (manyAcceptanceCriteria.length > 3) {
@@ -173,20 +191,26 @@ describe('Feature: figma-devops-integration, PBI Data Display', () => {
             creator: 'Test User',
             createdDate,
             modifiedDate,
-            lastUpdated
+            lastUpdated,
+            tags: [],
+            areaPath: 'Project\\Area',
+            iterationPath: 'Project\\Iteration',
+            boardColumn: 'Doing',
+            boardColumnDone: false,
+            changedBy: 'Test User'
           };
-          
+
           const displayData = renderPBIData(pbiData, 'expanded');
-          
+
           // Verify dates are formatted as strings
           expect(typeof displayData.formattedCreatedDate).toBe('string');
           expect(typeof displayData.formattedModifiedDate).toBe('string');
           expect(typeof displayData.formattedLastUpdated).toBe('string');
-          
+
           // Verify relative time formatting
           expect(typeof displayData.relativeLastUpdated).toBe('string');
           expect(displayData.relativeLastUpdated.length).toBeGreaterThan(0);
-          
+
           // Verify date formats are consistent
           const dateRegex = /^\d{1,2}\/\d{1,2}\/\d{4}$|^\d{4}-\d{2}-\d{2}$|^[A-Za-z]{3} \d{1,2}, \d{4}$/;
           expect(displayData.formattedCreatedDate).toMatch(dateRegex);
@@ -215,7 +239,7 @@ describe('Feature: figma-devops-integration, PBI Data Display', () => {
 
     test('should handle unknown states with default color', () => {
       fc.assert(fc.property(
-        fc.string({ minLength: 1, maxLength: 50 }).filter(s => 
+        fc.string({ minLength: 1, maxLength: 50 }).filter(s =>
           !['New', 'Active', 'Resolved', 'Closed', 'Done', 'In Progress', 'To Do'].includes(s)
         ),
         (unknownState: string) => {
@@ -239,17 +263,17 @@ describe('Feature: figma-devops-integration, PBI Data Display', () => {
 
       dangerousContent.forEach(content => {
         const sanitized = sanitizeHTMLContent(content);
-        
+
         // Should remove script tags
         expect(sanitized).not.toContain('<script>');
         expect(sanitized).not.toContain('</script>');
         expect(sanitized).not.toContain('alert(');
         expect(sanitized).not.toContain('javascript:');
-        
+
         // Should remove event handlers
         expect(sanitized).not.toContain('onclick=');
         expect(sanitized).not.toContain('onload=');
-        
+
         // Should preserve safe content
         if (content.includes('Normal content')) {
           expect(sanitized).toContain('Normal content');
@@ -272,14 +296,14 @@ function renderPBIData(pbiData: PBIData, displayMode: 'compact' | 'expanded') {
     createdDate: pbiData.createdDate,
     modifiedDate: pbiData.modifiedDate,
     lastUpdated: pbiData.lastUpdated,
-    
+
     // Display-specific fields
     displayTitle: truncateText(pbiData.title, displayMode === 'compact' ? 40 : 100),
     displayDescription: truncateText(pbiData.description, displayMode === 'compact' ? 50 : 200),
     displayAcceptanceCriteria: pbiData.acceptanceCriteria.slice(0, displayMode === 'compact' ? 1 : 3),
     hasMoreCriteria: pbiData.acceptanceCriteria.length > (displayMode === 'compact' ? 1 : 3),
     additionalCriteriaCount: Math.max(0, pbiData.acceptanceCriteria.length - (displayMode === 'compact' ? 1 : 3)),
-    
+
     // Formatted dates
     formattedCreatedDate: pbiData.createdDate.toLocaleDateString(),
     formattedModifiedDate: pbiData.modifiedDate.toLocaleDateString(),
@@ -300,7 +324,7 @@ function getStateColor(state: string): string {
     'In Progress': '#ed8936',
     'default': '#718096'
   };
-  
+
   return stateColors[state] || stateColors.default;
 }
 
@@ -320,7 +344,7 @@ function formatRelativeTime(date: Date): string {
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   if (diffDays < 7) return `${diffDays}d ago`;
-  
+
   return date.toLocaleDateString();
 }
 
@@ -332,17 +356,17 @@ function sanitizeHTMLContent(html: string): string {
   sanitized = sanitized.replace(/on\w+="[^"]*"/gi, '');
   sanitized = sanitized.replace(/on\w+='[^']*'/gi, '');
   sanitized = sanitized.replace(/javascript:/gi, '');
-  
+
   // Convert basic HTML tags to plain text
   sanitized = sanitized.replace(/<p[^>]*>/gi, '');
   sanitized = sanitized.replace(/<\/p>/gi, '\n');
   sanitized = sanitized.replace(/<br\s*\/?>/gi, '\n');
   sanitized = sanitized.replace(/<div[^>]*>/gi, '');
   sanitized = sanitized.replace(/<\/div>/gi, '\n');
-  
+
   // Remove remaining HTML tags but keep content
   sanitized = sanitized.replace(/<[^>]*>/g, '');
-  
+
   // Convert common HTML entities
   sanitized = sanitized.replace(/&lt;/g, '<');
   sanitized = sanitized.replace(/&gt;/g, '>');

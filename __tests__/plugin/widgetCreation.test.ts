@@ -16,6 +16,7 @@ const mockFigma = {
   }
 };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 (global as any).figma = mockFigma;
 
 describe('Feature: figma-devops-integration, Widget Creation', () => {
@@ -48,19 +49,26 @@ describe('Feature: figma-devops-integration, Widget Creation', () => {
             creator: fc.string({ minLength: 1, maxLength: 50 }),
             createdDate: fc.date(),
             modifiedDate: fc.date(),
-            lastUpdated: fc.date()
+            lastUpdated: fc.date(),
+            tags: fc.array(fc.string({ maxLength: 20 })),
+            areaPath: fc.string({ maxLength: 50 }),
+            iterationPath: fc.string({ maxLength: 50 }),
+            boardColumn: fc.string({ maxLength: 30 }),
+            boardColumnDone: fc.boolean(),
+            changedBy: fc.string({ maxLength: 50 })
           })
         }),
         ({ pbiInfo, pbiData }: { pbiInfo: ParsedPBIInfo; pbiData: PBIData }) => {
           // Simulate widget creation
+          mockFigma.createWidget.mockClear();
           const mockWidget = {
             widgetSyncedState: {},
             x: 0,
             y: 0
           };
-          
+
           mockFigma.createWidget.mockReturnValue(mockWidget);
-          
+
           // Create expected widget state
           const expectedState: WidgetState = {
             pbiInfo,
@@ -70,7 +78,7 @@ describe('Feature: figma-devops-integration, Widget Creation', () => {
             error: null,
             displayMode: 'expanded'
           };
-          
+
           // Simulate the widget creation process
           const widget = mockFigma.createWidget();
           widget.widgetSyncedState = {
@@ -81,11 +89,11 @@ describe('Feature: figma-devops-integration, Widget Creation', () => {
             error: null,
             displayMode: 'expanded'
           };
-          
+
           // Position the widget
           widget.x = mockFigma.viewport.center.x - 150;
           widget.y = mockFigma.viewport.center.y - 100;
-          
+
           // Verify widget was created with complete state
           expect(mockFigma.createWidget).toHaveBeenCalledTimes(1);
           expect(widget.widgetSyncedState).toMatchObject({
@@ -105,7 +113,7 @@ describe('Feature: figma-devops-integration, Widget Creation', () => {
             error: null,
             displayMode: 'expanded'
           });
-          
+
           // Verify widget positioning
           expect(widget.x).toBe(mockFigma.viewport.center.x - 150);
           expect(widget.y).toBe(mockFigma.viewport.center.y - 100);
@@ -128,7 +136,7 @@ describe('Feature: figma-devops-integration, Widget Creation', () => {
           mockFigma.createWidget.mockImplementation(() => {
             throw new Error('Widget creation failed');
           });
-          
+
           // Attempt widget creation should handle the error
           let errorThrown = false;
           try {
@@ -140,7 +148,7 @@ describe('Feature: figma-devops-integration, Widget Creation', () => {
             expect(error).toBeInstanceOf(Error);
             expect((error as Error).message).toBe('Widget creation failed');
           }
-          
+
           expect(errorThrown).toBe(true);
         }
       ), { numRuns: 5 });
@@ -166,7 +174,13 @@ describe('Feature: figma-devops-integration, Widget Creation', () => {
           creator: 'Test User',
           createdDate: new Date(),
           modifiedDate: new Date(),
-          lastUpdated: new Date()
+          lastUpdated: new Date(),
+          tags: ['tag1'],
+          areaPath: 'Project\\Area',
+          iterationPath: 'Project\\Iteration',
+          boardColumn: 'Doing',
+          boardColumnDone: false,
+          changedBy: 'Test User'
         },
         lastRefresh: new Date(),
         isLoading: false,
@@ -215,11 +229,11 @@ describe('Feature: figma-devops-integration, Widget Creation', () => {
 
       viewportCenters.forEach(center => {
         mockFigma.viewport.center = center;
-        
+
         const widget = mockFigma.createWidget();
         widget.x = center.x - 150;
         widget.y = center.y - 100;
-        
+
         expect(widget.x).toBe(center.x - 150);
         expect(widget.y).toBe(center.y - 100);
       });

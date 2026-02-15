@@ -103,13 +103,17 @@ export class PBIValidationService {
     }
 
     // Validate organization and project names (more permissive Azure DevOps naming rules)
-    const nameRegex = /^[a-zA-Z0-9\s\-_.( )]*$/; // More permissive regex
+    // Azure DevOps Organization naming rules: Alphanumeric and hyphens, start/end with alphanumeric
+    const orgNameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/;
 
-    if (!nameRegex.test(pbiInfo.organization)) {
+    // Azure DevOps Project naming rules: Alphanumeric, spaces, hyphens, underscores, periods. Start/end with alphanumeric
+    const projectNameRegex = /^[a-zA-Z0-9]([a-zA-Z0-9\s\-_.( )]*[a-zA-Z0-9])?$/;
+
+    if (!orgNameRegex.test(pbiInfo.organization)) {
       return false;
     }
 
-    if (!nameRegex.test(pbiInfo.project)) {
+    if (!projectNameRegex.test(pbiInfo.project)) {
       return false;
     }
 
