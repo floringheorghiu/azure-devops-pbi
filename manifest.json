@@ -4,7 +4,7 @@
   "api": "1.0.0",
   "widgetApi": "1.0.0",
   "containsWidget": true,
-  "main": "bundle_v4.js",
+  "main": "output.js",
   "ui": "ui.html",
   "permissions": [
     "currentuser"

@@ -12,6 +12,14 @@ private-backend-source.zip
 .npm_cache
 bundle_v2.js
 bundle_v3.js
+bundle_v3_2.js
+bundle_v3_2_new.js
+bundle_final_v3.2.js
+bundle_v3_2_new.js
+bundle_final_v3.2.js
+output.js
+bundle_final.js
+bundle_v4.js
 .npm-local/
 figma-log/
 bundle_v4.js

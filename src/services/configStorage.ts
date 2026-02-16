@@ -8,7 +8,7 @@ export class ConfigStorageService {
    * Stores config securely in Figma's clientStorage
    * @param config The configuration object to store
    */
-  static async storeConfig(config: { organization: string; pat: string; acPattern?: string; visibleFields?: Record<string, boolean> }): Promise<void> {
+  static async storeConfig(config: { organization: string; pat: string; acPattern?: string; visibleFields?: Record<string, boolean>; changeLogPageName?: string }): Promise<void> {
     try {
       // Validate PAT if it's being updated (non-empty)
       if (config.pat && !validatePATFormat(config.pat)) {
@@ -40,6 +40,7 @@ export class ConfigStorageService {
         encryptedPat: encryptedPat,
         acPattern: config.acPattern || '',
         visibleFields: config.visibleFields,
+        changeLogPageName: config.changeLogPageName,
         createdAt: new Date(),
       };
 
@@ -84,7 +85,7 @@ export class ConfigStorageService {
    * Retrieves and decrypts the stored config
    * @returns The decrypted config or null if not found
    */
-  static async retrieveConfig(): Promise<{ organization: string; pat: string; acPattern: string; visibleFields?: Record<string, boolean>; lastBaseUrl?: string } | null> {
+  static async retrieveConfig(): Promise<{ organization: string; pat: string; acPattern: string; visibleFields?: Record<string, boolean>; lastBaseUrl?: string; changeLogPageName?: string } | null> {
     try {
       const storedData = await figma.clientStorage.getAsync(this.STORAGE_KEY);
       if (!storedData) return null;
@@ -102,7 +103,8 @@ export class ConfigStorageService {
         pat,
         acPattern: parsedData.acPattern,
         visibleFields: parsedData.visibleFields,
-        lastBaseUrl: parsedData.lastBaseUrl
+        lastBaseUrl: parsedData.lastBaseUrl,
+        changeLogPageName: parsedData.changeLogPageName
       };
     } catch (error) {
       console.error('Failed to retrieve config:', error);
@@ -114,7 +116,7 @@ export class ConfigStorageService {
    * Retrieves non-sensitive parts of the config
    * @returns Config metadata or null if not found
    */
-  static async getConfigInfo(): Promise<{ organization: string; acPattern: string; visibleFields?: Record<string, boolean>; pat?: boolean; lastBaseUrl?: string } | null> {
+  static async getConfigInfo(): Promise<{ organization: string; acPattern: string; visibleFields?: Record<string, boolean>; pat?: boolean; lastBaseUrl?: string; changeLogPageName?: string } | null> {
     try {
       const storedData = await figma.clientStorage.getAsync(this.STORAGE_KEY);
       if (!storedData) return null;
@@ -126,7 +128,8 @@ export class ConfigStorageService {
         acPattern: parsedData.acPattern,
         visibleFields: parsedData.visibleFields,
         pat: !!(await decryptPAT(parsedData.encryptedPat)), // Verify if it can be decrypted with current key
-        lastBaseUrl: parsedData.lastBaseUrl
+        lastBaseUrl: parsedData.lastBaseUrl,
+        changeLogPageName: parsedData.changeLogPageName
       };
     } catch (error) {
       console.error('Failed to retrieve config info:', error);

@@ -42,6 +42,7 @@ export interface StoredConfig {
   createdAt: Date;
   visibleFields?: Record<string, boolean>;
   lastBaseUrl?: string; // Persist the last used URL
+  changeLogPageName?: string; // Custom name for the Change Log page
 }
 
 export interface WidgetState {
