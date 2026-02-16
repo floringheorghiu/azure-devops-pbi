@@ -242,6 +242,12 @@
       </div>
 
       <div class="form-group">
+        <label for="change-log-page-name">Change Log Page Name</label>
+        <input type="text" id="change-log-page-name" placeholder="Default: Change Log">
+        <div class="help-text">Optional: Name of the page where logs are stored.</div>
+      </div>
+
+      <div class="form-group">
         <label>Visible Fields</label>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
           <label><input type="checkbox" id="show-type" checked> Type of item</label>
@@ -281,6 +287,7 @@
     const acPatternInput = document.getElementById('ac-pattern');
     const baseUrlInput = document.getElementById('base-url');
     const pbiIdInput = document.getElementById('pbi-id');
+    const changeLogPageNameInput = document.getElementById('change-log-page-name');
     const versionDisplay = document.getElementById('version-display');
 
     // Field Checkboxes
@@ -363,6 +370,7 @@
       const organization = organizationInput.value.trim();
       const pat = patInput.value.trim();
       const acPattern = regexPreset.value === 'custom' ? acPatternInput.value.trim() : REGEX_PRESETS[regexPreset.value];
+      const changeLogPageName = changeLogPageNameInput.value.trim();
 
       const visibleFields = {};
       Object.keys(fields).forEach(key => visibleFields[key] = fields[key].checked);
@@ -372,7 +380,7 @@
         return;
       }
 
-      sendMessage('store-config', { organization, pat, acPattern, visibleFields });
+      sendMessage('store-config', { organization, pat, acPattern, visibleFields, changeLogPageName });
     }
 
     function handleClearConfig() {
@@ -380,6 +388,7 @@
       organizationInput.value = '';
       patInput.value = '';
       acPatternInput.value = '';
+      changeLogPageNameInput.value = '';
       regexPreset.value = 'power';
       updatePatStatus(false);
       showStatus('info', 'Configuration cleared.');
@@ -430,6 +439,7 @@
     function handleInit(payload) {
       if (payload.config) {
         organizationInput.value = payload.config.organization || '';
+        changeLogPageNameInput.value = payload.config.changeLogPageName || '';
         baseUrlInput.value = payload.config.lastBaseUrl || ''; // Pre-fill Last Base URL
 
         // Restore Regex

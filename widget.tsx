@@ -13,7 +13,7 @@ const { useSyncedState, usePropertyMenu, useWidgetId, AutoLayout, Text, Rectangl
 // Shared state for routing UI messages to the correct widget instance
 let activeInstanceUpdateHandler: ((url: string) => Promise<void>) | null = null;
 
-const WIDGET_VERSION = '3.1.0'; // UI Fix + Versioning
+const WIDGET_VERSION = '3.2.0'; // UI Fix + Versioning + Custom Log Page
 
 const PENDING_PBI_KEY = 'pending_pbi_data';
 
@@ -210,12 +210,16 @@ function PBIWidget() {
       const currentPageName = figma.currentPage.name;
       await figma.loadAllPagesAsync();
 
+      const config = await ConfigStorageService.retrieveConfig();
+      const logPageName = config?.changeLogPageName || "Change Log";
+
       // 1. Find or create "Change Log" page
-      let logPage = figma.root.children.find((p: any) => p.name === "Change Log");
+      let logPage = figma.root.children.find((p: any) => p.name === logPageName);
       if (!logPage) {
         logPage = figma.createPage();
-        logPage.name = "Change Log";
+        logPage.name = logPageName;
       }
+
 
       // 2. Find or create the main container frame
       let containerFrame = logPage.children.find((n: any) => n.name === "Change Log Container" && n.type === "FRAME");
