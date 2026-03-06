@@ -365,7 +365,7 @@ function PBIWidget() {
       await figma.loadFontAsync({ family: "Inter", style: "Regular" });
       await figma.loadFontAsync({ family: "Inter", style: "Bold" });
 
-      const widgetNode = figma.getNodeById(widgetId) as WidgetNode;
+      const widgetNode = await figma.getNodeByIdAsync(widgetId) as WidgetNode;
       if (!widgetNode || !widgetNode.parent) {
         figma.notify("Could not find widget node on the canvas.");
         return;
@@ -427,7 +427,7 @@ function PBIWidget() {
         contentText.layoutAlign = "STRETCH";
 
         // Make the first line bold
-        const firstNewLineIdx = acText.indexOf('\\n');
+        const firstNewLineIdx = acText.indexOf('\n');
         if (firstNewLineIdx !== -1) {
           contentText.setRangeFontName(0, firstNewLineIdx, { family: "Inter", style: "Bold" });
         } else {
