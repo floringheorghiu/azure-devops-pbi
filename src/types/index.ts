@@ -56,6 +56,8 @@ export interface WidgetState {
   visibleFields?: Record<string, boolean>;
   customWidth?: number;
   completedAcIndices?: number[];
+  previousAcceptanceCriteria?: string[];
+  acFrameIds?: Record<number, string>;
 }
 
 export interface BackendResponse {

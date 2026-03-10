@@ -83,7 +83,9 @@ function PBIWidget() {
     acPattern: '',
     customWidth: 340, // Default width
     visibleFields: undefined,
-    completedAcIndices: []
+    completedAcIndices: [],
+    previousAcceptanceCriteria: undefined,
+    acFrameIds: {}
   } as WidgetState);
 
   const [expandedAcIndex, setExpandedAcIndex] = useSyncedState('expandedAcIndex', -1);
@@ -159,12 +161,16 @@ function PBIWidget() {
       ...widgetState,
       pbiInfo: parseResult.data,
       currentData: validation.data,
+      previousAcceptanceCriteria: validation.data.acceptanceCriteria,
       lastRefresh: new Date(),
       isLoading: false,
       error: null,
       acPattern: config.acPattern || '',
       visibleFields: config.visibleFields
     });
+
+    // Automatically log the initial fetching of the PBI
+    await appendToLog("Work started on", false, validation.data);
   };
 
   const handleRefresh = async () => {
@@ -183,13 +189,36 @@ function PBIWidget() {
         throw new Error(validation.error?.userMessage || 'Failed to refresh work item.');
       }
 
+      // Determine if Acceptance Criteria changed
+      let hasChanges = false;
+      if (widgetState.currentData) {
+        const oldParsed = parseAcceptanceCriteria(widgetState.currentData);
+        const newParsed = parseAcceptanceCriteria(validation.data);
+        if (oldParsed.length !== newParsed.length) {
+          hasChanges = true;
+        } else {
+          for (let i = 0; i < newParsed.length; i++) {
+            if (oldParsed[i] !== newParsed[i]) {
+              hasChanges = true;
+              break;
+            }
+          }
+        }
+      }
+
       setWidgetState({
         ...widgetState,
         currentData: validation.data,
+        previousAcceptanceCriteria: widgetState.currentData?.acceptanceCriteria || undefined,
         lastRefresh: new Date(),
         isLoading: false,
         visibleFields: config.visibleFields // Refresh config too
       });
+
+      // Automatically log the refresh if scope changed
+      if (hasChanges) {
+        await appendToLog("Scope changed on", false, validation.data);
+      }
     } catch (err) {
       setWidgetState({
         ...widgetState,
@@ -205,7 +234,7 @@ function PBIWidget() {
   };
 
 
-  const handleLog = async () => {
+  const appendToLog = async (prefixText: string, isManual: boolean = false, pbiData?: PBIData) => {
     try {
       const currentPageName = figma.currentPage.name;
       await figma.loadAllPagesAsync();
@@ -303,14 +332,15 @@ function PBIWidget() {
       await figma.loadFontAsync({ family: "Inter", style: "Regular" });
       await figma.loadFontAsync({ family: "Inter", style: "Bold" }); // For Bold parts if needed
 
-      // Format: November 17, 2025; designer: Florin G.; #2180858: (GM) PAS Details Screen...
+      // Format: November 17, 2025; designer: Florin G.; Work on #2180858: (GM) PAS Details Screen...
       const now = new Date();
       const options: Intl.DateTimeFormatOptions = { year: 'numeric', month: 'long', day: 'numeric' };
       const dateStr = now.toLocaleDateString('en-US', options);
 
       const userName = figma.currentUser ? figma.currentUser.name : "Unknown User";
-      const pbiId = widgetState.currentData?.id || "?";
-      const pbiTitle = widgetState.currentData?.title || "No Title";
+      const dataToUse = pbiData || widgetState.currentData;
+      const pbiId = dataToUse?.id || "?";
+      const pbiTitle = dataToUse?.title || "No Title";
 
       const entryText = figma.createText();
       entryText.fontName = { family: "Inter", style: "Regular" };
@@ -319,7 +349,7 @@ function PBIWidget() {
       entryText.layoutAlign = "STRETCH";
 
       // Construct text content
-      const contentString = `${dateStr}; designer: ${userName}; #${pbiId}: ${pbiTitle}`;
+      const contentString = `${dateStr}; designer: ${userName}; ${prefixText} #${pbiId}: ${pbiTitle}`;
       entryText.characters = contentString;
 
       // Style specifics: Title underlined?
@@ -346,11 +376,167 @@ function PBIWidget() {
       pageSectionFrame.appendChild(entryText);
 
       // 5. Toast notification
-      figma.notify("Log entry created", { timeout: 2000 });
+      if (isManual) {
+        figma.notify("Log entry created", { timeout: 2000 });
+      }
 
     } catch (err: unknown) {
       console.error("Log Error:", err);
-      figma.notify("Failed to log entry: " + (err instanceof Error ? err.message : String(err)));
+      if (isManual) {
+        figma.notify("Failed to log entry: " + (err instanceof Error ? err.message : String(err)));
+      }
+    }
+  };
+
+  const handleLog = async () => {
+    await appendToLog("Work on", true);
+  };
+
+  const handleExtractAC = async () => {
+    try {
+      const parsedACs = parseAcceptanceCriteria(widgetState.currentData!);
+      if (!parsedACs || parsedACs.length === 0) {
+        figma.notify("No Acceptance Criteria found to extract.");
+        return;
+      }
+
+      await figma.loadFontAsync({ family: "Inter", style: "Regular" });
+      await figma.loadFontAsync({ family: "Inter", style: "Bold" });
+
+      const widgetNode = await figma.getNodeByIdAsync(widgetId) as WidgetNode;
+      if (!widgetNode || !widgetNode.parent) {
+        figma.notify("Could not find widget node on the canvas.");
+        return;
+      }
+
+      const newFrameIds: Record<number, string> = {};
+
+      let currentX = widgetNode.x + widgetNode.width + 50;
+      const currentY = widgetNode.y;
+
+      const pbiId = widgetState.currentData?.id || "?";
+
+      const now = new Date();
+      const options: Intl.DateTimeFormatOptions = {
+        year: 'numeric', month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit', hour12: false
+      };
+      // Format: "Feb 25, 2026; 16:58"
+      const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + "; " +
+        now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      for (let i = 0; i < parsedACs.length; i++) {
+        const acText = parsedACs[i];
+        const acNumber = i + 1;
+
+        const frame = figma.createFrame();
+        frame.name = `AC${acNumber} - #${pbiId}`;
+        frame.x = currentX;
+        frame.y = currentY;
+
+        frame.layoutMode = "VERTICAL";
+        frame.primaryAxisSizingMode = "AUTO";
+        frame.counterAxisSizingMode = "FIXED";
+        frame.resize(280, frame.height);
+
+        frame.paddingLeft = 16;
+        frame.paddingRight = 16;
+        frame.paddingTop = 16;
+        frame.paddingBottom = 16;
+        frame.itemSpacing = 12;
+
+        frame.cornerRadius = 8;
+        frame.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }];
+        frame.strokes = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }]; // Optional light stroke like widget
+
+        // 1. Header (Title + ACs link)
+        const headerFrame = figma.createFrame();
+        headerFrame.name = "AC Header";
+        headerFrame.layoutMode = "HORIZONTAL";
+        headerFrame.counterAxisSizingMode = "AUTO";
+        headerFrame.primaryAxisSizingMode = "FIXED";
+        headerFrame.layoutAlign = "STRETCH";
+        headerFrame.primaryAxisAlignItems = "SPACE_BETWEEN";
+        headerFrame.counterAxisAlignItems = "CENTER";
+        headerFrame.fills = [];
+
+        // 1a. AC Title
+        const titleText = figma.createText();
+        titleText.fontName = { family: "Inter", style: "Bold" };
+        titleText.characters = `AC${acNumber}`;
+        titleText.fontSize = 32;
+        titleText.fills = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
+        headerFrame.appendChild(titleText);
+
+        // 1b. ACs Link
+        const linkPill = figma.createFrame();
+        linkPill.name = "Widget Link";
+        linkPill.layoutMode = "HORIZONTAL";
+        linkPill.counterAxisSizingMode = "AUTO";
+        linkPill.primaryAxisSizingMode = "AUTO";
+        linkPill.paddingLeft = 8;
+        linkPill.paddingRight = 8;
+        linkPill.paddingTop = 4;
+        linkPill.paddingBottom = 4;
+        linkPill.cornerRadius = 4;
+        linkPill.fills = [];
+        linkPill.strokes = [{ type: 'SOLID', color: { r: 0.8, g: 0.8, b: 0.8 } }];
+
+        const linkText = figma.createText();
+        linkText.fontName = { family: "Inter", style: "Regular" };
+        linkText.characters = "ACs";
+        linkText.fontSize = 11;
+        linkText.fills = [{ type: 'SOLID', color: { r: 0.4, g: 0.4, b: 0.4 } }];
+        if (widgetId) {
+          linkText.setRangeHyperlink(0, 3, { type: 'NODE', value: widgetId });
+        }
+        linkPill.appendChild(linkText);
+        headerFrame.appendChild(linkPill);
+
+        frame.appendChild(headerFrame);
+
+        // 2. AC Content
+        const contentText = figma.createText();
+        contentText.fontName = { family: "Inter", style: "Regular" };
+        contentText.characters = acText;
+        contentText.fontSize = 11;
+        contentText.fills = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
+        contentText.layoutAlign = "STRETCH";
+
+        // Make the first line bold
+        const firstNewLineIdx = acText.indexOf('\n');
+        if (firstNewLineIdx !== -1) {
+          contentText.setRangeFontName(0, firstNewLineIdx, { family: "Inter", style: "Bold" });
+        } else {
+          // If no newline, just make it all bold or leave as is? The spec says "AC first title larger and bolder" which might mean the AC1 part. But the mock shows the first sentence of the AC text as bold. Let's make the first line bold if we can find it.
+          // Actually, looking at the mock, the first line is the title of the AC from Azure DevOps.
+          contentText.setRangeFontName(0, acText.length, { family: "Inter", style: "Bold" }); // Fallback if single line
+        }
+        frame.appendChild(contentText);
+
+        // 3. Timestamp
+        const timeText = figma.createText();
+        timeText.fontName = { family: "Inter", style: "Regular" };
+        timeText.characters = `Date: ${dateStr}`;
+        timeText.fontSize = 11;
+        timeText.fills = [{ type: 'SOLID', color: { r: 0.53, g: 0.53, b: 0.53 } }]; // #888
+        timeText.layoutAlign = "STRETCH";
+        frame.appendChild(timeText);
+
+        widgetNode.parent.appendChild(frame);
+
+        newFrameIds[i] = frame.id;
+
+        currentX += 280 + 50; // next frame position
+      }
+
+      setWidgetState({ ...widgetState, acFrameIds: newFrameIds });
+
+      figma.notify("Acceptance Criteria extracted successfully.");
+
+    } catch (err: unknown) {
+      console.error("Extract AC Error:", err);
+      figma.notify("Failed to extract AC: " + (err instanceof Error ? err.message : String(err)));
     }
   };
 
@@ -502,6 +688,30 @@ function PBIWidget() {
     return text.trim();
   };
 
+  const getAcStatus = (newAc: string, oldAcs?: string[]): 'unchanged' | 'new' | 'diff' => {
+    if (!oldAcs || oldAcs.length === 0) return 'unchanged';
+    if (oldAcs.includes(newAc)) return 'unchanged';
+
+    const getWords = (text: string) => text.toLowerCase().split(/\W+/).filter(w => w.length > 2);
+    const newWords = getWords(newAc);
+    if (newWords.length === 0) return 'new';
+
+    for (const oldAc of oldAcs) {
+      const oldWords = getWords(oldAc);
+      let intersection = 0;
+      for (const word of newWords) {
+        if (oldWords.includes(word)) intersection++;
+      }
+      const union = newWords.length + oldWords.length - intersection;
+      const similarity = union === 0 ? 0 : intersection / union;
+
+      if (similarity > 0.4) {
+        return 'diff';
+      }
+    }
+    return 'new';
+  };
+
   if (widgetState.isLoading) return <LoadingState />;
   if (widgetState.error) return <ErrorState error={widgetState.error} onRetry={handleRefresh} onConfigure={handleOpenUI} />;
 
@@ -604,16 +814,31 @@ function PBIWidget() {
       <AutoLayout direction="vertical" width="fill-parent" spacing={4}>
         < Text fontSize={12} fontWeight={600} > Acceptance Criteria</Text >
         {
-          parsedACs.map((ac, index) => (
-            <AccordionItem
-              key={index}
-              content={ac}
-              isExpanded={index === expandedAcIndex}
-              isDone={(widgetState.completedAcIndices || []).includes(index)}
-              onClick={() => setExpandedAcIndex(index === expandedAcIndex ? -1 : index)}
-              onToggle={() => toggleAcStatus(index)}
-            />
-          ))
+          parsedACs.map((ac, index) => {
+            const status = getAcStatus(ac, widgetState.previousAcceptanceCriteria);
+            const acFrameId = widgetState.acFrameIds ? widgetState.acFrameIds[index] : undefined;
+            return (
+              <AccordionItem
+                key={index}
+                content={ac}
+                isExpanded={index === expandedAcIndex}
+                isDone={(widgetState.completedAcIndices || []).includes(index)}
+                status={status}
+                hasLink={!!acFrameId}
+                onLinkClick={() => {
+                  if (acFrameId) {
+                    figma.getNodeByIdAsync(acFrameId).then((node: BaseNode | null) => {
+                      if (node && node.type !== 'DOCUMENT' && node.type !== 'PAGE') {
+                        figma.viewport.scrollAndZoomIntoView([node as SceneNode]);
+                      }
+                    });
+                  }
+                }}
+                onClick={() => setExpandedAcIndex(index === expandedAcIndex ? -1 : index)}
+                onToggle={() => toggleAcStatus(index)}
+              />
+            );
+          })
         }
       </AutoLayout >
 
@@ -684,7 +909,7 @@ const ToggleCheck = ({ isDone, onToggle }: { isDone: boolean, onToggle: () => vo
   </AutoLayout>
 );
 
-const AccordionItem = ({ content, isExpanded, isDone, onClick, onToggle }: { content: string, isExpanded: boolean, isDone: boolean, onClick: () => void, onToggle: () => void, key?: any }) => (
+const AccordionItem = ({ content, isExpanded, isDone, status, hasLink, onLinkClick, onClick, onToggle }: { content: string, isExpanded: boolean, isDone: boolean, status: 'unchanged' | 'new' | 'diff', hasLink: boolean, onLinkClick: () => void, onClick: () => void, onToggle: () => void, key?: any }) => (
   <AutoLayout direction="vertical" width="fill-parent" stroke="#EEE" cornerRadius={4} hoverStyle={{ bg: '#F7F7F7' }} cursor="pointer">
     {/* Header Section: Text + Toggle */}
     < AutoLayout
@@ -695,9 +920,39 @@ const AccordionItem = ({ content, isExpanded, isDone, onClick, onToggle }: { con
       direction="horizontal"
       onClick={onClick}
     >
-      < Text fontSize={11} width="fill-parent" paragraphIndent={0} lineHeight={16}>
-        {isExpanded ? content : truncateText(stripHTMLSimple(content), 50)}
-      </Text>
+      <AutoLayout direction="vertical" width="fill-parent" spacing={4}>
+        <AutoLayout width="fill-parent" direction="horizontal" spacing={4} verticalAlignItems="center">
+          {status === 'new' && (
+            <AutoLayout padding={{ horizontal: 4, vertical: 2 }} cornerRadius={4} fill="#E1DFDD">
+              <Text fontSize={9} fill="#005A9E" fontWeight="bold">NEW</Text>
+            </AutoLayout>
+          )}
+          {status === 'diff' && (
+            <AutoLayout padding={{ horizontal: 4, vertical: 2 }} cornerRadius={4} fill="#FFF4CE">
+              <Text fontSize={9} fill="#9D5D00" fontWeight="bold">DIFF</Text>
+            </AutoLayout>
+          )}
+          {hasLink && (
+            <AutoLayout
+              padding={{ horizontal: 6, vertical: 2 }}
+              cornerRadius={4}
+              stroke="#D2D0CE"
+              hoverStyle={{ bg: '#F3F2F1' }}
+              onClick={() => {
+                return new Promise((resolve) => {
+                  onLinkClick();
+                  resolve(null);
+                });
+              }}
+            >
+              <Text fontSize={9} fill="#323130">Link</Text>
+            </AutoLayout>
+          )}
+        </AutoLayout>
+        <Text fontSize={11} width="fill-parent" paragraphIndent={0} lineHeight={16}>
+          {isExpanded ? content : truncateText(stripHTMLSimple(content), 50)}
+        </Text>
+      </AutoLayout>
 
       {/* Toggle Button - Separate interaction */}
       <ToggleCheck isDone={isDone} onToggle={onToggle} />
