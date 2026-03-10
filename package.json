@@ -8,7 +8,7 @@
     "lint": "eslint --ext .ts,.tsx --ignore-pattern node_modules .",
     "lint:fix": "eslint --ext .ts,.tsx --ignore-pattern node_modules --fix .",
     "watch": "npm run build -- --watch",
-    "test": "jest --cacheDirectory=.jest-cache",
+    "test": "jest --forceExit --passWithNoTests --cacheDirectory=.jest-cache",
     "test:watch": "jest --watch"
   },
   "author": "",
@@ -32,6 +32,10 @@
     ],
     "parser": "@typescript-eslint/parser",
     "parserOptions": {},
+    "ignorePatterns": [
+      "__tests__/*",
+      "dist/*"
+    ],
     "root": true,
     "rules": {
       "@typescript-eslint/no-unused-vars": [
