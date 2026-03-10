@@ -745,7 +745,7 @@ function PBIWidget() {
 
       {/* Footer Info / Log Input */}
       {isLogging ? (
-        <AutoLayout width="fill-parent" stroke="#CCC" cornerRadius={4} verticalAlignItems="center" fill="#FFF">
+        <AutoLayout width="fill-parent" stroke="#CCC" cornerRadius={4} verticalAlignItems="center" fill="#FFF" padding={{ left: 4, top: 4, bottom: 4, right: 0 }}>
           <Input
             value={logComment}
             placeholder="Write a comment and press Enter to log, or hit Esc to leave the log record blank."
