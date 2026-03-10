@@ -426,7 +426,8 @@ function PBIWidget() {
         now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
       for (let i = 0; i < parsedACs.length; i++) {
-        const acText = parsedACs[i];
+        const acText = stripHtml(parsedACs[i]);
+        if (!acText) continue;
         const acNumber = i + 1;
 
         const frame = figma.createFrame();
@@ -540,110 +541,7 @@ function PBIWidget() {
     }
   };
 
-  const handleExtractAC = async () => {
-    try {
-      const parsedACs = parseAcceptanceCriteria(widgetState.currentData!);
-      if (!parsedACs || parsedACs.length === 0) {
-        figma.notify("No Acceptance Criteria found to extract.");
-        return;
-      }
 
-      await figma.loadFontAsync({ family: "Inter", style: "Regular" });
-      await figma.loadFontAsync({ family: "Inter", style: "Bold" });
-
-      const widgetNode = await figma.getNodeByIdAsync(widgetId) as WidgetNode;
-      if (!widgetNode || !widgetNode.parent) {
-        figma.notify("Could not find widget node on the canvas.");
-        return;
-      }
-
-      let currentX = widgetNode.x + widgetNode.width + 50;
-      const currentY = widgetNode.y;
-
-      const pbiId = widgetState.currentData?.id || "?";
-
-      const now = new Date();
-      const options: Intl.DateTimeFormatOptions = {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', hour12: false
-      };
-      // Format: "Feb 25, 2026; 16:58"
-      const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + "; " +
-        now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-
-      for (let i = 0; i < parsedACs.length; i++) {
-        const acText = stripHtml(parsedACs[i]);
-        if (!acText) continue;
-
-        const acNumber = i + 1;
-        const frameName = `AC${acNumber} - #${pbiId}`;
-
-        const frame = figma.createFrame();
-        frame.name = frameName;
-        frame.x = currentX;
-        frame.y = currentY;
-        frame.layoutMode = "VERTICAL";
-        frame.counterAxisSizingMode = "FIXED";
-        frame.primaryAxisSizingMode = "AUTO";
-        frame.resize(280, 100); // Width 280, auto height will take over
-        frame.paddingLeft = 16;
-        frame.paddingRight = 16;
-        frame.paddingTop = 16;
-        frame.paddingBottom = 16;
-        frame.itemSpacing = 12;
-        frame.cornerRadius = 8;
-        frame.fills = [{ type: 'SOLID', color: { r: 1, g: 1, b: 1 } }]; // White bg
-        frame.strokes = [{ type: 'SOLID', color: { r: 0.9, g: 0.9, b: 0.9 } }]; // Optional light stroke like widget
-
-        // 1. AC Title
-        const titleText = figma.createText();
-        titleText.fontName = { family: "Inter", style: "Bold" };
-        titleText.characters = `AC${acNumber}`;
-        titleText.fontSize = 32;
-        titleText.fills = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
-        titleText.layoutAlign = "STRETCH";
-        frame.appendChild(titleText);
-
-        // 2. AC Content
-        const contentText = figma.createText();
-        contentText.fontName = { family: "Inter", style: "Regular" };
-        contentText.characters = acText;
-        contentText.fontSize = 11;
-        contentText.fills = [{ type: 'SOLID', color: { r: 0, g: 0, b: 0 } }];
-        contentText.layoutAlign = "STRETCH";
-
-        // Make the first line bold
-        const firstNewLineIdx = acText.indexOf('\n');
-        if (firstNewLineIdx !== -1) {
-          contentText.setRangeFontName(0, firstNewLineIdx, { family: "Inter", style: "Bold" });
-        } else {
-          // If no newline, just make it all bold or leave as is? The spec says "AC first title larger and bolder" which might mean the AC1 part. But the mock shows the first sentence of the AC text as bold. Let's make the first line bold if we can find it.
-          // Actually, looking at the mock, the first line is the title of the AC from Azure DevOps.
-          contentText.setRangeFontName(0, acText.length, { family: "Inter", style: "Bold" }); // Fallback if single line
-        }
-        frame.appendChild(contentText);
-
-        // 3. Timestamp
-        const timeText = figma.createText();
-        timeText.fontName = { family: "Inter", style: "Regular" };
-        timeText.characters = `Date: ${dateStr}`;
-        timeText.fontSize = 11;
-        timeText.fills = [{ type: 'SOLID', color: { r: 0.53, g: 0.53, b: 0.53 } }]; // #888
-        timeText.layoutAlign = "STRETCH";
-        frame.appendChild(timeText);
-
-        widgetNode.parent.appendChild(frame);
-
-        currentX += 280 + 50; // next frame position
-      }
-
-      figma.notify("Acceptance Criteria extracted successfully.");
-
-    } catch (err: unknown) {
-      console.error("Extract AC Error:", err);
-      figma.notify("Failed to extract AC: " + (err instanceof Error ? err.message : String(err)));
-    }
-  };
 
   const handleResize = (delta: number) => {
     const current = widgetState.customWidth || 340;
