@@ -8,7 +8,7 @@ declare const figma: any;
 declare const __html__: string;
 
 const { widget } = figma;
-const { useSyncedState, useWidgetId, AutoLayout, Text, Rectangle, SVG, useEffect, waitForTask, h, Fragment } = (widget || {}) as any;
+const { useSyncedState, useWidgetId, AutoLayout, Text, Rectangle, SVG, useEffect, waitForTask, h, Fragment, Input } = (widget || {}) as any;
 
 // Shared state for routing UI messages to the correct widget instance
 let activeInstanceUpdateHandler: ((url: string) => Promise<void>) | null = null;
@@ -90,6 +90,8 @@ function PBIWidget() {
 
   const [expandedAcIndex, setExpandedAcIndex] = useSyncedState('expandedAcIndex', -1);
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useSyncedState('isDescriptionExpanded', false);
+  const [isLogging, setIsLogging] = useSyncedState('isLogging', false);
+  const [logComment, setLogComment] = useSyncedState('logComment', '');
 
   // Safely check for pending data in a lifecycle hook
   useEffect(() => {
@@ -234,7 +236,7 @@ function PBIWidget() {
   };
 
 
-  const appendToLog = async (prefixText: string, isManual: boolean = false, pbiData?: PBIData) => {
+  const appendToLog = async (prefixText: string, isManual: boolean = false, pbiData?: PBIData | null, comment: string = "") => {
     try {
       const currentPageName = figma.currentPage.name;
       await figma.loadAllPagesAsync();
@@ -349,7 +351,7 @@ function PBIWidget() {
       entryText.layoutAlign = "STRETCH";
 
       // Construct text content
-      const contentString = `${dateStr}; designer: ${userName}; ${prefixText} #${pbiId}: ${pbiTitle}`;
+      const contentString = `${dateStr}; designer: ${userName}; ${prefixText} #${pbiId}: ${pbiTitle}${comment ? '\n' + comment : ''}`;
       entryText.characters = contentString;
 
       // Style specifics: Title underlined?
@@ -388,8 +390,9 @@ function PBIWidget() {
     }
   };
 
-  const handleLog = async () => {
-    await appendToLog("Work on", true);
+  const handleLog = () => {
+    setIsLogging(true);
+    setLogComment('');
   };
 
   const handleExtractAC = async () => {
@@ -737,14 +740,39 @@ function PBIWidget() {
         }
       </AutoLayout >
 
-      {/* Footer Info */}
-      <AutoLayout width="fill-parent" verticalAlignItems="center" spacing={8} wrap={true}>
-        {show.showAssigned && < Text fontSize={10} fill="#999">Assigned: {widgetState.currentData.assignedTo || 'Unassigned'}</Text>}
-        {show.showChanged && < Text fontSize={10} fill="#999"> | Mod: {widgetState.currentData.changedBy}</Text>}
-        < Text fontSize={10} fill="#999">
-          {widgetState.lastRefresh ? ` | ${formatRelativeTime(widgetState.lastRefresh)}` : ''}
-        </Text >
-      </AutoLayout >
+      {/* Footer Info / Log Input */}
+      {isLogging ? (
+        <AutoLayout width="fill-parent" stroke="#CCC" cornerRadius={4} verticalAlignItems="center" fill="#FFF">
+          <Input
+            value={logComment}
+            placeholder="Write a comment and press Enter to log, or hit Esc to leave the log record blank."
+            onTextEditEnd={async (e: any) => {
+              setIsLogging(false);
+              await appendToLog("Work on", true, null, e.characters);
+            }}
+            width="fill-parent"
+            fontSize={10}
+            fill="#333"
+          />
+          <AutoLayout
+            padding={4}
+            onClick={async () => {
+              setIsLogging(false);
+              await appendToLog("Work on", true, null, logComment);
+            }}
+          >
+            <Text fontSize={10} fill="#999">✕</Text>
+          </AutoLayout>
+        </AutoLayout>
+      ) : (
+        <AutoLayout width="fill-parent" verticalAlignItems="center" spacing={8} wrap={true}>
+          {show.showAssigned && < Text fontSize={10} fill="#999">Assigned: {widgetState.currentData.assignedTo || 'Unassigned'}</Text>}
+          {show.showChanged && < Text fontSize={10} fill="#999"> | Mod: {widgetState.currentData.changedBy}</Text>}
+          < Text fontSize={10} fill="#999">
+            {widgetState.lastRefresh ? ` | ${formatRelativeTime(widgetState.lastRefresh)}` : ''}
+          </Text >
+        </AutoLayout >
+      )}
 
       {/* Footer Controls */}
       <AutoLayout
