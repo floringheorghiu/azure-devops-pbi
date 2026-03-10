@@ -964,7 +964,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           figma.notify("Config saved.");
         }
         break;
-      case 'create-widget':
+      case 'create-widget': {
         // Payload has URL
         const payload = msg.payload as any;
         if (payload.url) {
@@ -980,6 +980,7 @@ figma.ui.onmessage = async (msg: PluginMessage) => {
           figma.notify("PBI Saved! Drag a new widget to see it.");
         }
         break;
+      }
       // ...
       // ... (rest of switch)
 
