@@ -6,7 +6,7 @@ import { ConfigStorageService } from '../../src/services/configStorage';
 import { PBIValidationService } from '../../src/services/pbiValidation';
 
 // Mock the services
-jest.mock('../../src/services/patStorage');
+jest.mock('../../src/services/configStorage');
 jest.mock('../../src/services/pbiValidation');
 
 const mockConfigStorageService = ConfigStorageService as jest.Mocked<typeof ConfigStorageService>;
