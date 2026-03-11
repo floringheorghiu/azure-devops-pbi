@@ -435,7 +435,7 @@ function PBIWidget() {
 
         const acText = stripHtml(parsedACs[i]);
         if (!acText) continue;
-        
+
         extractedCount++;
         const acNumber = extractedCount;
 
@@ -879,7 +879,7 @@ const AccordionItem = ({ content, isExpanded, isDone, isIgnored, status, hasLink
           )}
           {isIgnored && (
             <AutoLayout padding={{ horizontal: 4, vertical: 2 }} cornerRadius={4} fill="#EAEAEA">
-              <Text fontSize={9} fill="#666666" fontWeight="bold">Not AC</Text>
+              <Text fontSize={9} fill="#666666" fontWeight="bold">NOT IN SCOPE</Text>
             </AutoLayout>
           )}
           {hasLink && (
