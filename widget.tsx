@@ -84,6 +84,7 @@ function PBIWidget() {
     customWidth: 340, // Default width
     visibleFields: undefined,
     completedAcIndices: [],
+    ignoredAcIndices: [],
     previousAcceptanceCriteria: undefined,
     acFrameIds: {}
   } as WidgetState);
@@ -211,7 +212,7 @@ function PBIWidget() {
       setWidgetState({
         ...widgetState,
         currentData: validation.data,
-        previousAcceptanceCriteria: widgetState.currentData?.acceptanceCriteria || undefined,
+        previousAcceptanceCriteria: hasChanges ? (widgetState.currentData?.acceptanceCriteria || undefined) : undefined,
         lastRefresh: new Date(),
         isLoading: false,
         visibleFields: config.visibleFields // Refresh config too
@@ -428,10 +429,15 @@ function PBIWidget() {
       const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + "; " +
         now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
 
+      let extractedCount = 0;
       for (let i = 0; i < parsedACs.length; i++) {
+        if (widgetState.ignoredAcIndices?.includes(i)) continue;
+
         const acText = stripHtml(parsedACs[i]);
         if (!acText) continue;
-        const acNumber = i + 1;
+        
+        extractedCount++;
+        const acNumber = extractedCount;
 
         const frame = figma.createFrame();
         frame.name = `AC${acNumber} - #${pbiId}`;
@@ -561,6 +567,17 @@ function PBIWidget() {
       newIndices = [...currentIndices, index];
     }
     setWidgetState({ ...widgetState, completedAcIndices: newIndices });
+  };
+
+  const toggleAcIgnore = (index: number) => {
+    const currentIndices = widgetState.ignoredAcIndices || [];
+    let newIndices;
+    if (currentIndices.includes(index)) {
+      newIndices = currentIndices.filter((i: number) => i !== index);
+    } else {
+      newIndices = [...currentIndices, index];
+    }
+    setWidgetState({ ...widgetState, ignoredAcIndices: newIndices });
   };
 
   const parseAcceptanceCriteria = (data: PBIData): string[] => {
@@ -724,6 +741,7 @@ function PBIWidget() {
                 content={ac}
                 isExpanded={index === expandedAcIndex}
                 isDone={(widgetState.completedAcIndices || []).includes(index)}
+                isIgnored={(widgetState.ignoredAcIndices || []).includes(index)}
                 status={status}
                 hasLink={!!acFrameId}
                 onLinkClick={() => {
@@ -737,6 +755,7 @@ function PBIWidget() {
                 }}
                 onClick={() => setExpandedAcIndex(index === expandedAcIndex ? -1 : index)}
                 onToggle={() => toggleAcStatus(index)}
+                onIgnoreToggle={() => toggleAcIgnore(index)}
               />
             );
           })
@@ -835,8 +854,8 @@ const ToggleCheck = ({ isDone, onToggle }: { isDone: boolean, onToggle: () => vo
   </AutoLayout>
 );
 
-const AccordionItem = ({ content, isExpanded, isDone, status, hasLink, onLinkClick, onClick, onToggle }: { content: string, isExpanded: boolean, isDone: boolean, status: 'unchanged' | 'new' | 'diff', hasLink: boolean, onLinkClick: () => void, onClick: () => void, onToggle: () => void, key?: any }) => (
-  <AutoLayout direction="vertical" width="fill-parent" stroke="#EEE" cornerRadius={4} hoverStyle={{ bg: '#F7F7F7' }} cursor="pointer">
+const AccordionItem = ({ content, isExpanded, isDone, isIgnored, status, hasLink, onLinkClick, onClick, onToggle, onIgnoreToggle }: { content: string, isExpanded: boolean, isDone: boolean, isIgnored: boolean, status: 'unchanged' | 'new' | 'diff', hasLink: boolean, onLinkClick: () => void, onClick: () => void, onToggle: () => void, onIgnoreToggle: () => void, key?: any }) => (
+  <AutoLayout direction="vertical" width="fill-parent" stroke={isExpanded ? "#6B6B6B" : "#EEEEEE"} cornerRadius={4} hoverStyle={{ bg: '#F7F7F7' }} cursor="pointer">
     {/* Header Section: Text + Toggle */}
     < AutoLayout
       width="fill-parent"
@@ -858,6 +877,11 @@ const AccordionItem = ({ content, isExpanded, isDone, status, hasLink, onLinkCli
               <Text fontSize={9} fill="#9D5D00" fontWeight="bold">DIFF</Text>
             </AutoLayout>
           )}
+          {isIgnored && (
+            <AutoLayout padding={{ horizontal: 4, vertical: 2 }} cornerRadius={4} fill="#EAEAEA">
+              <Text fontSize={9} fill="#666666" fontWeight="bold">Not AC</Text>
+            </AutoLayout>
+          )}
           {hasLink && (
             <AutoLayout
               padding={{ horizontal: 6, vertical: 2 }}
@@ -875,7 +899,7 @@ const AccordionItem = ({ content, isExpanded, isDone, status, hasLink, onLinkCli
             </AutoLayout>
           )}
         </AutoLayout>
-        <Text fontSize={11} width="fill-parent" paragraphIndent={0} lineHeight={16}>
+        <Text fontSize={11} width="fill-parent" paragraphIndent={0} lineHeight={16} opacity={isIgnored ? 0.6 : 1}>
           {isExpanded ? content : truncateText(stripHTMLSimple(content), 50)}
         </Text>
       </AutoLayout>
@@ -884,6 +908,22 @@ const AccordionItem = ({ content, isExpanded, isDone, status, hasLink, onLinkCli
       <ToggleCheck isDone={isDone} onToggle={onToggle} />
 
     </AutoLayout >
+    {isExpanded && (
+      <AutoLayout width="fill-parent" horizontalAlignItems="end" padding={{ top: 0, bottom: 8, left: 8, right: 8 }}>
+        <AutoLayout
+          onClick={() => {
+            return new Promise((resolve) => {
+              onIgnoreToggle();
+              resolve(null);
+            });
+          }}
+          cursor="pointer"
+          hoverStyle={{ opacity: 0.8 }}
+        >
+          <SVG src={`<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="0.5" y="0.5" width="19" height="19" rx="9.5" fill="#F6F6F6"/><rect x="0.5" y="0.5" width="19" height="19" rx="9.5" stroke="#999999"/><path d="M6.25 6.25L13.75 13.75M13.75 6.25L6.25 13.75" stroke="#999999" stroke-linecap="round"/></svg>`} />
+        </AutoLayout>
+      </AutoLayout>
+    )}
   </AutoLayout >
 );
 
