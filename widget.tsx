@@ -426,9 +426,6 @@ function PBIWidget() {
 
       let extractedCount = 0;
       for (let i = 0; i < parsedACs.length; i++) {
-        // Skip ACs marked as "Not in Scope" by the user
-        if (widgetState.ignoredAcIndices?.includes(i)) continue;
-
         const acText = stripHtml(parsedACs[i]);
         if (!acText) continue;
 
