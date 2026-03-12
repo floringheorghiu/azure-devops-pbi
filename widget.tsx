@@ -13,7 +13,7 @@ const { useSyncedState, useWidgetId, AutoLayout, Text, Rectangle, SVG, useEffect
 // Shared state for routing UI messages to the correct widget instance
 let activeInstanceUpdateHandler: ((url: string) => Promise<void>) | null = null;
 
-const WIDGET_VERSION = '3.2.0'; // UI Fix + Versioning + Custom Log Page
+const WIDGET_VERSION = '3.3.0'; // Image detection support
 
 const PENDING_PBI_KEY = 'pending_pbi_data';
 
@@ -900,7 +900,7 @@ const AccordionItem = ({ content, isExpanded, isDone, isIgnored, status, hasLink
           )}
         </AutoLayout>
         <Text fontSize={11} width="fill-parent" paragraphIndent={0} lineHeight={16} opacity={isIgnored ? 0.6 : 1}>
-          {isExpanded ? content : truncateText(stripHTMLSimple(content), 50)}
+          {isExpanded ? content : truncateText(stripHTMLSimple(content), 50)} {content.includes('[image inserted]') && !isExpanded && <Fragment> &nbsp;[image inserted]</Fragment>}
         </Text>
       </AutoLayout>
 

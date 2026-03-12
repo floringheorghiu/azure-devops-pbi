@@ -208,7 +208,7 @@ export class AzureDevOpsClient {
       id: workItem.id,
       title: fields['System.Title'] || 'Untitled Work Item',
       state: fields['System.State'] || 'Unknown',
-      description: ValidationService.sanitizeHTML(fields['System.Description'] || ''),
+      description: ValidationService.sanitizeHTML(fields['System.Description'] || '', true),
       acceptanceCriteria,
       assignedTo: fields['System.AssignedTo']?.displayName,
       lastUpdated: new Date(fields['System.ChangedDate'] || fields['System.CreatedDate'] || Date.now()),
@@ -237,7 +237,7 @@ export class AzureDevOpsClient {
     }
 
     // Sanitize HTML first
-    const sanitized = ValidationService.sanitizeHTML(htmlContent);
+    const sanitized = ValidationService.sanitizeHTML(htmlContent, true);
 
     // Split by common delimiters and clean up
     const criteria = sanitized

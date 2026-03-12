@@ -39,9 +39,14 @@ export class ValidationService {
 
   /**
    * Sanitizes HTML content for safe display in Figma widgets
+   * @param html HTML content
+   * @param checkImages Whether to append an image marker if <img> tags are present
    */
-  static sanitizeHTML(html: string): string {
+  static sanitizeHTML(html: string, checkImages: boolean = false): string {
     if (!html) return '';
+
+    // Check for images before stripping tags
+    const hasImages = checkImages && /<img\b[^>]*>/i.test(html);
 
     // Remove script tags and event handlers
     let sanitized = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
@@ -77,6 +82,11 @@ export class ValidationService {
     // Clean up multiple newlines and whitespace
     sanitized = sanitized.replace(/\n\s*\n/g, '\n');
     sanitized = sanitized.replace(/^\s+|\s+$/g, '');
+
+    // Append image flag if requested and images were found
+    if (hasImages && !sanitized.includes('[image inserted]')) {
+      sanitized += ' [image inserted]';
+    }
 
     return sanitized;
   }
