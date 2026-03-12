@@ -421,13 +421,8 @@ function PBIWidget() {
       const pbiId = widgetState.currentData?.id || "?";
 
       const now = new Date();
-      const options: Intl.DateTimeFormatOptions = {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', hour12: false
-      };
-      // Format: "Feb 25, 2026; 16:58"
-      const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + "; " +
-        now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+      // Format: "Feb 25, 2026"
+      const dateStr = now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
       let extractedCount = 0;
       for (let i = 0; i < parsedACs.length; i++) {
