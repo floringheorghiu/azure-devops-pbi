@@ -683,7 +683,7 @@ function PBIWidget() {
       <AutoLayout spacing={8} wrap={true} width="fill-parent">
         {show.showType && <Text fontSize={11} fill="#666" fontWeight={500}>{widgetState.currentData.workItemType}</Text>}
         {show.showState && <StatePill state={widgetState.currentData.state} />}
-        {widgetState.currentData.boardColumn && <StatePill state={widgetState.currentData.boardColumn} isColumn={true} />}
+        {!!widgetState.currentData.boardColumn && <StatePill state={widgetState.currentData.boardColumn} isColumn={true} />}
         {show.showDone && widgetState.currentData.boardColumnDone && (
           <AutoLayout padding={{ horizontal: 6, vertical: 2 }} cornerRadius={10} fill="#DFF6DD">
             <Text fontSize={10} fill="#107C10">Done</Text>
@@ -705,7 +705,7 @@ function PBIWidget() {
       )}
 
       {/* Description */}
-      {show.showDesc && widgetState.currentData.description && (
+      {show.showDesc && !!widgetState.currentData.description && (
         <AutoLayout
           direction="vertical"
           width="fill-parent"
